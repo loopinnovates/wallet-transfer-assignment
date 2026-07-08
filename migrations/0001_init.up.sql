@@ -1,7 +1,7 @@
 CREATE TABLE IF NOT EXISTS wallets (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     owner_name      TEXT NOT NULL,
-    balance         BIGINT NOT NULL DEFAULT 0 CHECK (balance >= 0),
+    balance         DOUBLE PRECISION NOT NULL DEFAULT 0 CHECK (balance >= 0),
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS transfers (
     idempotency_key     TEXT NOT NULL UNIQUE,
     from_wallet_id      UUID NOT NULL REFERENCES wallets(id),
     to_wallet_id        UUID NOT NULL REFERENCES wallets(id),
-    amount              BIGINT NOT NULL CHECK (amount > 0),
+    amount              DOUBLE PRECISION NOT NULL CHECK (amount > 0),
     status              transfer_status NOT NULL DEFAULT 'PENDING',
     failure_reason      TEXT,
     created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -39,7 +39,7 @@ CREATE TABLE IF NOT EXISTS ledger_entries (
     transfer_id     UUID NOT NULL REFERENCES transfers(id),
     wallet_id       UUID NOT NULL REFERENCES wallets(id),
     entry_type      ledger_entry_type NOT NULL,
-    amount          BIGINT NOT NULL CHECK (amount > 0),
+    amount          DOUBLE PRECISION NOT NULL CHECK (amount > 0),
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
     -- exactly one DEBIT and one CREDIT row per transfer
     UNIQUE (transfer_id, entry_type)

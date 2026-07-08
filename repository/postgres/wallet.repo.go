@@ -6,27 +6,34 @@ import (
 	"errors"
 
 	"github.com/loopinnovates/wallet-transfer-assignment/internal/domain"
+	"github.com/loopinnovates/wallet-transfer-assignment/repository/postgres/sqlcgen"
 )
 
 type WalletRepository struct {
-	readDB  *sql.DB
-	writeDB *sql.DB
+	readQueries *sqlcgen.Queries
 }
 
 func NewWalletRepository(readDB *sql.DB, writeDB *sql.DB) *WalletRepository {
-	return &WalletRepository{readDB: readDB, writeDB: writeDB}
+	return &WalletRepository{readQueries: sqlcgen.New(readDB)}
 }
 
 func (r *WalletRepository) GetByID(ctx context.Context, id string) (*domain.Wallet, error) {
-	var w domain.Wallet
-	err := r.readDB.QueryRowContext(ctx, queryGetWalletByID, id).Scan(
-		&w.ID, &w.OwnerName, &w.Balance, &w.CreatedAt, &w.UpdatedAt,
-	)
+	w, err := r.readQueries.GetWalletByID(ctx, id)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, domain.ErrWalletNotFound
 	}
 	if err != nil {
 		return nil, err
 	}
-	return &w, nil
+	return toDomainWallet(w), nil
+}
+
+func toDomainWallet(w sqlcgen.Wallet) *domain.Wallet {
+	return &domain.Wallet{
+		ID:        w.ID,
+		OwnerName: w.OwnerName,
+		Balance:   w.Balance,
+		CreatedAt: w.CreatedAt,
+		UpdatedAt: w.UpdatedAt,
+	}
 }

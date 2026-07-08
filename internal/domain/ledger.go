@@ -14,6 +14,6 @@ type LedgerEntry struct {
 	TransferID string
 	WalletID   string
 	EntryType  LedgerEntryType
-	Amount     int64
+	Amount     float64
 	CreatedAt  time.Time
 }

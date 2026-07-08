@@ -1,4 +1,4 @@
-.PHONY: run build test test-race lint db-up db-down migrate-up test-coverage deploy
+.PHONY: run build test test-race lint db-up db-down migrate-up migrate-down test-coverage deploy
 
 DATABASE_URL ?= postgres://wallet:wallet@localhost:5432/wallet_transfer?sslmode=disable
 COVERAGE_THRESHOLD := 80
@@ -37,6 +37,9 @@ db-down:
 
 migrate-up:
 	migrate -database "$(DATABASE_URL)" -path migrations up
+
+migrate-down:
+	migrate -database "$(DATABASE_URL)" -path migrations down 1
 
 build: migrate-up
 	mockery
