@@ -13,6 +13,7 @@ import (
 	"github.com/loopinnovates/wallet-transfer-assignment/internal/config"
 	"github.com/loopinnovates/wallet-transfer-assignment/internal/router"
 	"github.com/loopinnovates/wallet-transfer-assignment/internal/service"
+	"github.com/loopinnovates/wallet-transfer-assignment/internal/worker"
 	"github.com/loopinnovates/wallet-transfer-assignment/pkg/factory"
 	"github.com/loopinnovates/wallet-transfer-assignment/repository/postgres"
 )
@@ -28,10 +29,12 @@ func main() {
 	}
 	defer appFactory.Close()
 
+	transferRepo := postgres.NewTransferRepository(appFactory.ReadPGReplica, appFactory.WritePGReplica)
+
 	RouterContext := &router.RouterContext{
 		WalletSvc: &service.WalletService{
 			WalletRepo:   postgres.NewWalletRepository(appFactory.ReadPGReplica, appFactory.WritePGReplica),
-			TransferRepo: postgres.NewTransferRepository(appFactory.ReadPGReplica, appFactory.WritePGReplica),
+			TransferRepo: transferRepo,
 		},
 	}
 
@@ -50,16 +53,23 @@ func main() {
 		serveErr <- nil
 	}()
 
+	reconCtx, cancelRecon := context.WithCancel(context.Background())
+	defer cancelRecon()
+	recon := &worker.PendingTransferRecon{TransferRepo: transferRepo}
+	go recon.Run(reconCtx)
+
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
 
 	select {
 	case err := <-serveErr:
+		cancelRecon()
 		if err != nil {
 			log.Fatalf("server failed: %v", err)
 		}
 	case sig := <-stop:
 		log.Printf("received %s, shutting down gracefully", sig)
+		cancelRecon()
 
 		ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 		defer cancel()

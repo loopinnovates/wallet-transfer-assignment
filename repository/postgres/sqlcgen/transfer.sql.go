@@ -10,6 +10,29 @@ import (
 	"database/sql"
 )
 
+const getTransferByID = `-- name: GetTransferByID :one
+SELECT id, idempotency_key, from_wallet_id, to_wallet_id, amount, status, failure_reason, created_at, updated_at
+FROM transfers
+WHERE id = $1
+`
+
+func (q *Queries) GetTransferByID(ctx context.Context, id string) (Transfer, error) {
+	row := q.db.QueryRowContext(ctx, getTransferByID, id)
+	var i Transfer
+	err := row.Scan(
+		&i.ID,
+		&i.IdempotencyKey,
+		&i.FromWalletID,
+		&i.ToWalletID,
+		&i.Amount,
+		&i.Status,
+		&i.FailureReason,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getTransferByIdempotencyKey = `-- name: GetTransferByIdempotencyKey :one
 SELECT id, idempotency_key, from_wallet_id, to_wallet_id, amount, status, failure_reason, created_at, updated_at
 FROM transfers
@@ -88,6 +111,46 @@ func (q *Queries) InsertPendingTransfer(ctx context.Context, arg InsertPendingTr
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const listPendingTransfers = `-- name: ListPendingTransfers :many
+SELECT id, idempotency_key, from_wallet_id, to_wallet_id, amount, status, failure_reason, created_at, updated_at
+FROM transfers
+WHERE status = 'PENDING' AND created_at >= now() - interval '30 minutes'
+ORDER BY created_at ASC
+`
+
+func (q *Queries) ListPendingTransfers(ctx context.Context) ([]Transfer, error) {
+	rows, err := q.db.QueryContext(ctx, listPendingTransfers)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Transfer{}
+	for rows.Next() {
+		var i Transfer
+		if err := rows.Scan(
+			&i.ID,
+			&i.IdempotencyKey,
+			&i.FromWalletID,
+			&i.ToWalletID,
+			&i.Amount,
+			&i.Status,
+			&i.FailureReason,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const markTransferFailed = `-- name: MarkTransferFailed :one

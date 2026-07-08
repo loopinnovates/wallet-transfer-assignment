@@ -11,11 +11,13 @@ import (
 type Querier interface {
 	CreditWallet(ctx context.Context, arg CreditWalletParams) error
 	DebitWallet(ctx context.Context, arg DebitWalletParams) error
+	GetTransferByID(ctx context.Context, id string) (Transfer, error)
 	GetTransferByIdempotencyKey(ctx context.Context, idempotencyKey string) (Transfer, error)
 	GetWalletBalance(ctx context.Context, id string) (float64, error)
 	GetWalletByID(ctx context.Context, id string) (Wallet, error)
 	InsertLedgerEntry(ctx context.Context, arg InsertLedgerEntryParams) error
 	InsertPendingTransfer(ctx context.Context, arg InsertPendingTransferParams) (Transfer, error)
+	ListPendingTransfers(ctx context.Context) ([]Transfer, error)
 	LockWalletByID(ctx context.Context, id string) (string, error)
 	MarkTransferFailed(ctx context.Context, arg MarkTransferFailedParams) (Transfer, error)
 	MarkTransferProcessed(ctx context.Context, id string) (Transfer, error)

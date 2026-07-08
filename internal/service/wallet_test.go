@@ -12,9 +12,9 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
-func newWalletService() (*service.WalletService, *testutils.MockWalletRepository, *testutils.MockTransferRepository) {
-	mockWalletRepo := &testutils.MockWalletRepository{}
-	mockTransferRepo := &testutils.MockTransferRepository{}
+func newWalletService() (*service.WalletService, *testutils.MockIWalletRepository, *testutils.MockITransferRepository) {
+	mockWalletRepo := &testutils.MockIWalletRepository{}
+	mockTransferRepo := &testutils.MockITransferRepository{}
 	return &service.WalletService{
 		WalletRepo:   mockWalletRepo,
 		TransferRepo: mockTransferRepo,

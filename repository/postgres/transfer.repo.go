@@ -41,6 +41,26 @@ func (r *TransferRepository) GetByIdempotencyKey(ctx context.Context, key string
 	})
 }
 
+func (r *TransferRepository) ListPendingTransfers(ctx context.Context) ([]*domain.Transfer, error) {
+	return withRetry(ctx, func() ([]*domain.Transfer, error) {
+		rows, err := r.readQueries.ListPendingTransfers(ctx)
+		if err != nil {
+			return nil, err
+		}
+		transfers := make([]*domain.Transfer, len(rows))
+		for i, row := range rows {
+			transfers[i] = toDomainTransfer(row)
+		}
+		return transfers, nil
+	})
+}
+
+func (r *TransferRepository) ResolvePendingTransfer(ctx context.Context, transfer *domain.Transfer) (*domain.Transfer, error) {
+	return withRetry(ctx, func() (*domain.Transfer, error) {
+		return r.finalizePendingTransfer(ctx, transfer.ID, transfer.FromWalletID, transfer.ToWalletID, transfer.Amount)
+	})
+}
+
 func (r *TransferRepository) ExecuteTransfer(ctx context.Context, idempotencyKey, fromWalletID, toWalletID string, amount float64, timestamp int64) (*domain.Transfer, error) {
 	return withRetry(ctx, func() (*domain.Transfer, error) {
 		return r.executeTransferOnce(ctx, idempotencyKey, fromWalletID, toWalletID, amount, timestamp)
@@ -52,7 +72,10 @@ func (r *TransferRepository) executeTransferOnce(ctx context.Context, idempotenc
 	if err != nil {
 		return nil, err
 	}
+	return r.finalizePendingTransfer(ctx, pending.ID, fromWalletID, toWalletID, amount)
+}
 
+func (r *TransferRepository) finalizePendingTransfer(ctx context.Context, transferID, fromWalletID, toWalletID string, amount float64) (*domain.Transfer, error) {
 	tx, err := r.writeDB.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, err
@@ -69,36 +92,49 @@ func (r *TransferRepository) executeTransferOnce(ctx context.Context, idempotenc
 		return nil, err
 	}
 
-	if err := moveFunds(ctx, qtx, fromWalletID, toWalletID, amount); err != nil {
-		if !errors.Is(err, domain.ErrInsufficientBalance) {
-			return nil, err
-		}
-		failed, markErr := qtx.MarkTransferFailed(ctx, sqlcgen.MarkTransferFailedParams{
-			ID:            pending.ID,
-			FailureReason: sql.NullString{String: err.Error(), Valid: true},
-		})
-		if markErr != nil {
-			return nil, markErr
-		}
-		if err := tx.Commit(); err != nil {
-			return nil, err
-		}
-		return toDomainTransfer(failed), nil
-	}
-
-	processed, err := qtx.MarkTransferProcessed(ctx, pending.ID)
+	current, err := qtx.GetTransferByID(ctx, transferID)
 	if err != nil {
 		return nil, err
 	}
+	if current.Status != string(domain.TransferPending) {
+		return toDomainTransfer(current), nil
+	}
 
-	if err := insertLedgerEntries(ctx, qtx, processed.ID, fromWalletID, toWalletID, amount); err != nil {
+	result, err := r.moveAndFinalize(ctx, qtx, transferID, fromWalletID, toWalletID, amount)
+	if err != nil {
 		return nil, err
 	}
 
 	if err := tx.Commit(); err != nil {
 		return nil, err
 	}
-	return toDomainTransfer(processed), nil
+	return result, nil
+}
+
+func (r *TransferRepository) moveAndFinalize(ctx context.Context, qtx *sqlcgen.Queries, transferID, fromWalletID, toWalletID string, amount float64) (*domain.Transfer, error) {
+	moveErr := moveFunds(ctx, qtx, fromWalletID, toWalletID, amount)
+	if moveErr == nil {
+		processed, err := qtx.MarkTransferProcessed(ctx, transferID)
+		if err != nil {
+			return nil, err
+		}
+		if err := insertLedgerEntries(ctx, qtx, processed.ID, fromWalletID, toWalletID, amount); err != nil {
+			return nil, err
+		}
+		return toDomainTransfer(processed), nil
+	}
+	if !errors.Is(moveErr, domain.ErrInsufficientBalance) {
+		return nil, moveErr
+	}
+
+	failed, err := qtx.MarkTransferFailed(ctx, sqlcgen.MarkTransferFailedParams{
+		ID:            transferID,
+		FailureReason: sql.NullString{String: moveErr.Error(), Valid: true},
+	})
+	if err != nil {
+		return nil, err
+	}
+	return toDomainTransfer(failed), nil
 }
 
 func insertPendingTransfer(ctx context.Context, db *sql.DB, q *sqlcgen.Queries, idempotencyKey, fromWalletID, toWalletID string, amount float64) (sqlcgen.Transfer, error) {
