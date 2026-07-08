@@ -18,7 +18,6 @@ type WalletService struct {
 }
 
 func (s *WalletService) TransferFunds(ctx context.Context, idempotencyKey string, fromWalletID string, toWalletID string, amount float64) (string, string, int64, error) {
-
 	timestamp := time.Now().UnixMilli()
 
 	transfer, err := s.TransferRepo.ExecuteTransfer(ctx, idempotencyKey, fromWalletID, toWalletID, amount, timestamp)
@@ -34,16 +33,12 @@ func (s *WalletService) TransferFunds(ctx context.Context, idempotencyKey string
 	}
 
 	if transfer.Status == domain.TransferFailed {
-		return "", "", 0, domain.ErrTransferFailed
+		return "", "", 0, failureReasonError(transfer)
 	}
 
 	return transfer.ID, string(transfer.Status), transfer.CreatedAt.UnixMilli(), nil
 }
 
-// replayIdempotentTransfer handles a unique-constraint conflict on
-// idempotencyKey. If the retried request matches the original transfer's
-// parameters, it returns the original result instead of an error. Otherwise
-// the key was reused with different parameters and that is a real conflict.
 func (s *WalletService) replayIdempotentTransfer(ctx context.Context, idempotencyKey, fromWalletID, toWalletID string, amount float64) (string, string, int64, error) {
 	existing, err := s.TransferRepo.GetByIdempotencyKey(ctx, idempotencyKey)
 	if err != nil {
@@ -58,8 +53,15 @@ func (s *WalletService) replayIdempotentTransfer(ctx context.Context, idempotenc
 	}
 
 	if existing.Status == domain.TransferFailed {
-		return "", "", 0, domain.ErrTransferFailed
+		return "", "", 0, failureReasonError(existing)
 	}
 
 	return existing.ID, string(existing.Status), existing.CreatedAt.UnixMilli(), nil
+}
+
+func failureReasonError(t *domain.Transfer) error {
+	if t.FailureReason != nil && *t.FailureReason == domain.ErrInsufficientBalance.Error() {
+		return domain.ErrInsufficientBalance
+	}
+	return domain.ErrTransferFailed
 }

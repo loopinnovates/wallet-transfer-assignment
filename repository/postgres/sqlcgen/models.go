@@ -9,15 +9,6 @@ import (
 	"time"
 )
 
-type IdempotencyRecord struct {
-	IdempotencyKey     string        `json:"idempotency_key"`
-	RequestFingerprint string        `json:"request_fingerprint"`
-	TransferID         string        `json:"transfer_id"`
-	ResponseStatus     sql.NullInt32 `json:"response_status"`
-	ResponseBody       []byte        `json:"response_body"`
-	CreatedAt          time.Time     `json:"created_at"`
-}
-
 type LedgerEntry struct {
 	ID         string    `json:"id"`
 	TransferID string    `json:"transfer_id"`

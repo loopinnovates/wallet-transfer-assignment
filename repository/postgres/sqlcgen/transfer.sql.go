@@ -7,6 +7,7 @@ package sqlcgen
 
 import (
 	"context"
+	"database/sql"
 )
 
 const getTransferByIdempotencyKey = `-- name: GetTransferByIdempotencyKey :one
@@ -54,26 +55,79 @@ func (q *Queries) InsertLedgerEntry(ctx context.Context, arg InsertLedgerEntryPa
 	return err
 }
 
-const insertTransfer = `-- name: InsertTransfer :one
+const insertPendingTransfer = `-- name: InsertPendingTransfer :one
 INSERT INTO transfers (idempotency_key, from_wallet_id, to_wallet_id, amount, status)
-VALUES ($1, $2, $3, $4, 'PROCESSED')
+VALUES ($1, $2, $3, $4, 'PENDING')
 RETURNING id, idempotency_key, from_wallet_id, to_wallet_id, amount, status, failure_reason, created_at, updated_at
 `
 
-type InsertTransferParams struct {
+type InsertPendingTransferParams struct {
 	IdempotencyKey string  `json:"idempotency_key"`
 	FromWalletID   string  `json:"from_wallet_id"`
 	ToWalletID     string  `json:"to_wallet_id"`
 	Amount         float64 `json:"amount"`
 }
 
-func (q *Queries) InsertTransfer(ctx context.Context, arg InsertTransferParams) (Transfer, error) {
-	row := q.db.QueryRowContext(ctx, insertTransfer,
+func (q *Queries) InsertPendingTransfer(ctx context.Context, arg InsertPendingTransferParams) (Transfer, error) {
+	row := q.db.QueryRowContext(ctx, insertPendingTransfer,
 		arg.IdempotencyKey,
 		arg.FromWalletID,
 		arg.ToWalletID,
 		arg.Amount,
 	)
+	var i Transfer
+	err := row.Scan(
+		&i.ID,
+		&i.IdempotencyKey,
+		&i.FromWalletID,
+		&i.ToWalletID,
+		&i.Amount,
+		&i.Status,
+		&i.FailureReason,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const markTransferFailed = `-- name: MarkTransferFailed :one
+UPDATE transfers
+SET status = 'FAILED', failure_reason = $2, updated_at = now()
+WHERE id = $1 AND status = 'PENDING'
+RETURNING id, idempotency_key, from_wallet_id, to_wallet_id, amount, status, failure_reason, created_at, updated_at
+`
+
+type MarkTransferFailedParams struct {
+	ID            string         `json:"id"`
+	FailureReason sql.NullString `json:"failure_reason"`
+}
+
+func (q *Queries) MarkTransferFailed(ctx context.Context, arg MarkTransferFailedParams) (Transfer, error) {
+	row := q.db.QueryRowContext(ctx, markTransferFailed, arg.ID, arg.FailureReason)
+	var i Transfer
+	err := row.Scan(
+		&i.ID,
+		&i.IdempotencyKey,
+		&i.FromWalletID,
+		&i.ToWalletID,
+		&i.Amount,
+		&i.Status,
+		&i.FailureReason,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const markTransferProcessed = `-- name: MarkTransferProcessed :one
+UPDATE transfers
+SET status = 'PROCESSED', updated_at = now()
+WHERE id = $1 AND status = 'PENDING'
+RETURNING id, idempotency_key, from_wallet_id, to_wallet_id, amount, status, failure_reason, created_at, updated_at
+`
+
+func (q *Queries) MarkTransferProcessed(ctx context.Context, id string) (Transfer, error) {
+	row := q.db.QueryRowContext(ctx, markTransferProcessed, id)
 	var i Transfer
 	err := row.Scan(
 		&i.ID,

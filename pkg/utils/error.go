@@ -1,7 +1,5 @@
 package utils
 
-// CustomError carries the HTTP status code alongside the message, so callers
-// don't need to pass status and message as separate WriteError arguments.
 type CustomError struct {
 	StatusCode int
 	Message    string

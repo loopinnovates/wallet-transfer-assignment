@@ -1,9 +1,11 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/loopinnovates/wallet-transfer-assignment/internal/dto"
 	"github.com/loopinnovates/wallet-transfer-assignment/internal/service"
@@ -11,9 +13,12 @@ import (
 	"github.com/loopinnovates/wallet-transfer-assignment/pkg/utils"
 )
 
+const transferTimeout = 5 * time.Second
+
 func TransferHandler(walletSvc service.IWalletSvc) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ctx := r.Context()
+		ctx, cancel := context.WithTimeout(r.Context(), transferTimeout)
+		defer cancel()
 
 		var req dto.TransferRequest
 

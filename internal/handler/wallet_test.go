@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 
 	"github.com/loopinnovates/wallet-transfer-assignment/internal/dto"
 	"github.com/loopinnovates/wallet-transfer-assignment/internal/handler"
@@ -19,7 +20,7 @@ func TestTransferHandler(t *testing.T) {
 	mockWalletSvc := testutils.MockIWalletSvc{}
 
 	ctx := context.Background()
-	mockWalletSvc.On("TransferFunds", ctx, "test-idempotency-key", "wallet1", "wallet2", 100.0).Return("txn_123", "success", int64(1234567890), nil)
+	mockWalletSvc.On("TransferFunds", mock.Anything, "test-idempotency-key", "wallet1", "wallet2", 100.0).Return("txn_123", "success", int64(1234567890), nil)
 
 	body, _ := json.Marshal(dto.TransferRequest{
 		IdempotencyKey: "test-idempotency-key",
@@ -119,7 +120,7 @@ func TestTransferHandler_ServiceError(t *testing.T) {
 	mockWalletSvc := testutils.MockIWalletSvc{}
 
 	ctx := context.Background()
-	mockWalletSvc.On("TransferFunds", ctx, "test-idempotency-key", "wallet1", "wallet2", 100.0).Return("", "", int64(0), assert.AnError)
+	mockWalletSvc.On("TransferFunds", mock.Anything, "test-idempotency-key", "wallet1", "wallet2", 100.0).Return("", "", int64(0), assert.AnError)
 
 	body, _ := json.Marshal(dto.TransferRequest{
 		IdempotencyKey: "test-idempotency-key",

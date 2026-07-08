@@ -15,8 +15,10 @@ type Querier interface {
 	GetWalletBalance(ctx context.Context, id string) (float64, error)
 	GetWalletByID(ctx context.Context, id string) (Wallet, error)
 	InsertLedgerEntry(ctx context.Context, arg InsertLedgerEntryParams) error
-	InsertTransfer(ctx context.Context, arg InsertTransferParams) (Transfer, error)
+	InsertPendingTransfer(ctx context.Context, arg InsertPendingTransferParams) (Transfer, error)
 	LockWalletByID(ctx context.Context, id string) (string, error)
+	MarkTransferFailed(ctx context.Context, arg MarkTransferFailedParams) (Transfer, error)
+	MarkTransferProcessed(ctx context.Context, id string) (Transfer, error)
 }
 
 var _ Querier = (*Queries)(nil)

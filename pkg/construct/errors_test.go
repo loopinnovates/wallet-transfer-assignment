@@ -1,6 +1,7 @@
 package construct_test
 
 import (
+	"context"
 	"testing"
 
 	"github.com/loopinnovates/wallet-transfer-assignment/internal/domain"
@@ -24,6 +25,9 @@ func TestMapTransferError(t *testing.T) {
 
 	err = construct.MapTransferError(domain.ErrTransferFailed)
 	assert.Equal(t, construct.ErrTransferFailed, err)
+
+	err = construct.MapTransferError(context.DeadlineExceeded)
+	assert.Equal(t, construct.ErrTransferTimeout, err)
 
 	err = construct.MapTransferError(nil)
 	assert.Equal(t, construct.ErrTransferFailed, err)

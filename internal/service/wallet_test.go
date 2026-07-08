@@ -67,6 +67,26 @@ func TestWalletService_TransferFunds_ExecuteTransferStatusFailed(t *testing.T) {
 	assert.Zero(t, timestamp)
 }
 
+// A transfer persisted as FAILED due to insufficient balance must surface
+// the specific ErrInsufficientBalance, not the generic ErrTransferFailed,
+// so the client still gets an accurate 422 rather than a 500.
+func TestWalletService_TransferFunds_ExecuteTransferFailed_InsufficientBalance(t *testing.T) {
+	ctx := context.Background()
+	walletService, _, mockTransferRepo := newWalletService()
+
+	reason := domain.ErrInsufficientBalance.Error()
+	mockTransferRepo.On("ExecuteTransfer", ctx, "unique-key-123", "wallet1", "wallet2", 100.0, mock.AnythingOfType("int64")).
+		Return(&domain.Transfer{ID: "txn_123", Status: domain.TransferFailed, FailureReason: &reason}, nil)
+
+	transactionID, status, timestamp, err := walletService.TransferFunds(ctx, "unique-key-123", "wallet1", "wallet2", 100.0)
+
+	assert.ErrorIs(t, err, domain.ErrInsufficientBalance)
+	assert.NotErrorIs(t, err, domain.ErrTransferFailed)
+	assert.Empty(t, transactionID)
+	assert.Empty(t, status)
+	assert.Zero(t, timestamp)
+}
+
 func TestWalletService_TransferFunds_ExecuteTransferReturnsNil(t *testing.T) {
 	ctx := context.Background()
 	walletService, _, mockTransferRepo := newWalletService()
@@ -172,6 +192,37 @@ func TestWalletService_TransferFunds_IdempotentReplay_OriginalFailed(t *testing.
 	transactionID, status, timestamp, err := walletService.TransferFunds(ctx, "unique-key-123", "wallet1", "wallet2", 100.0)
 
 	assert.ErrorIs(t, err, domain.ErrTransferFailed)
+	assert.Empty(t, transactionID)
+	assert.Empty(t, status)
+	assert.Zero(t, timestamp)
+}
+
+// A replay of a request that originally failed with insufficient balance
+// must return that same specific error, not the generic ErrTransferFailed -
+// the client should see identical, accurate outcomes on both the original
+// attempt and any duplicate/retry.
+func TestWalletService_TransferFunds_IdempotentReplay_OriginalInsufficientBalance(t *testing.T) {
+	ctx := context.Background()
+	walletService, _, mockTransferRepo := newWalletService()
+
+	reason := domain.ErrInsufficientBalance.Error()
+	existing := &domain.Transfer{
+		ID:            "txn_123",
+		FromWalletID:  "wallet1",
+		ToWalletID:    "wallet2",
+		Amount:        100.0,
+		Status:        domain.TransferFailed,
+		FailureReason: &reason,
+		CreatedAt:     time.Now(),
+	}
+
+	mockTransferRepo.On("ExecuteTransfer", ctx, "unique-key-123", "wallet1", "wallet2", 100.0, mock.AnythingOfType("int64")).
+		Return(nil, domain.ErrIdempotencyKeyConflict)
+	mockTransferRepo.On("GetByIdempotencyKey", ctx, "unique-key-123").Return(existing, nil)
+
+	transactionID, status, timestamp, err := walletService.TransferFunds(ctx, "unique-key-123", "wallet1", "wallet2", 100.0)
+
+	assert.ErrorIs(t, err, domain.ErrInsufficientBalance)
 	assert.Empty(t, transactionID)
 	assert.Empty(t, status)
 	assert.Zero(t, timestamp)

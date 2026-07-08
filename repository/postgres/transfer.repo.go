@@ -29,21 +29,30 @@ func NewTransferRepository(readDB *sql.DB, writeDB *sql.DB) *TransferRepository 
 }
 
 func (r *TransferRepository) GetByIdempotencyKey(ctx context.Context, key string) (*domain.Transfer, error) {
-	t, err := r.readQueries.GetTransferByIdempotencyKey(ctx, key)
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil, nil
-	}
+	return withRetry(ctx, func() (*domain.Transfer, error) {
+		t, err := r.readQueries.GetTransferByIdempotencyKey(ctx, key)
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		if err != nil {
+			return nil, err
+		}
+		return toDomainTransfer(t), nil
+	})
+}
+
+func (r *TransferRepository) ExecuteTransfer(ctx context.Context, idempotencyKey, fromWalletID, toWalletID string, amount float64, timestamp int64) (*domain.Transfer, error) {
+	return withRetry(ctx, func() (*domain.Transfer, error) {
+		return r.executeTransferOnce(ctx, idempotencyKey, fromWalletID, toWalletID, amount, timestamp)
+	})
+}
+
+func (r *TransferRepository) executeTransferOnce(ctx context.Context, idempotencyKey, fromWalletID, toWalletID string, amount float64, timestamp int64) (*domain.Transfer, error) {
+	pending, err := insertPendingTransfer(ctx, r.writeDB, r.writeQueries, idempotencyKey, fromWalletID, toWalletID, amount)
 	if err != nil {
 		return nil, err
 	}
-	return toDomainTransfer(t), nil
-}
 
-// ExecuteTransfer atomically debits fromWalletID, credits toWalletID, and
-// records the transfer plus its ledger entries in a single DB transaction.
-// Wallet rows are locked in a fixed ID order to avoid deadlocks between
-// concurrent transfers that touch the same pair of wallets in reverse order.
-func (r *TransferRepository) ExecuteTransfer(ctx context.Context, idempotencyKey, fromWalletID, toWalletID string, amount float64, timestamp int64) (*domain.Transfer, error) {
 	tx, err := r.writeDB.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, err
@@ -59,23 +68,76 @@ func (r *TransferRepository) ExecuteTransfer(ctx context.Context, idempotencyKey
 	if err := lockWalletPair(ctx, qtx, fromWalletID, toWalletID); err != nil {
 		return nil, err
 	}
+
 	if err := moveFunds(ctx, qtx, fromWalletID, toWalletID, amount); err != nil {
+		if !errors.Is(err, domain.ErrInsufficientBalance) {
+			return nil, err
+		}
+		failed, markErr := qtx.MarkTransferFailed(ctx, sqlcgen.MarkTransferFailedParams{
+			ID:            pending.ID,
+			FailureReason: sql.NullString{String: err.Error(), Valid: true},
+		})
+		if markErr != nil {
+			return nil, markErr
+		}
+		if err := tx.Commit(); err != nil {
+			return nil, err
+		}
+		return toDomainTransfer(failed), nil
+	}
+
+	processed, err := qtx.MarkTransferProcessed(ctx, pending.ID)
+	if err != nil {
 		return nil, err
 	}
 
-	t, err := insertTransferWithLedger(ctx, qtx, idempotencyKey, fromWalletID, toWalletID, amount)
-	if err != nil {
+	if err := insertLedgerEntries(ctx, qtx, processed.ID, fromWalletID, toWalletID, amount); err != nil {
 		return nil, err
 	}
 
 	if err := tx.Commit(); err != nil {
 		return nil, err
 	}
+	return toDomainTransfer(processed), nil
+}
+
+func insertPendingTransfer(ctx context.Context, db *sql.DB, q *sqlcgen.Queries, idempotencyKey, fromWalletID, toWalletID string, amount float64) (sqlcgen.Transfer, error) {
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return sqlcgen.Transfer{}, err
+	}
+	defer func() {
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+			fmt.Printf("Error in rolling back transaction: %v", err)
+		}
+	}()
+
+	qtx := q.WithTx(tx)
+
+	if err := lockWalletPair(ctx, qtx, fromWalletID, toWalletID); err != nil {
+		return sqlcgen.Transfer{}, err
+	}
+
+	t, err := qtx.InsertPendingTransfer(ctx, sqlcgen.InsertPendingTransferParams{
+		IdempotencyKey: idempotencyKey,
+		FromWalletID:   fromWalletID,
+		ToWalletID:     toWalletID,
+		Amount:         amount,
+	})
+	if err != nil {
+		var pqErr *pq.Error
+		if errors.As(err, &pqErr) && pqErr.Code == uniqueViolationCode {
+			return sqlcgen.Transfer{}, domain.ErrIdempotencyKeyConflict
+		}
+		return sqlcgen.Transfer{}, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return sqlcgen.Transfer{}, err
+	}
 	return t, nil
 }
 
-// lockWalletPair takes row locks on both wallets in a fixed ID order to
-// avoid deadlocks between concurrent transfers touching the same pair.
 func lockWalletPair(ctx context.Context, qtx *sqlcgen.Queries, walletA, walletB string) error {
 	sortedIDs := []string{walletA, walletB}
 	sort.Strings(sortedIDs)
@@ -85,7 +147,6 @@ func lockWalletPair(ctx context.Context, qtx *sqlcgen.Queries, walletA, walletB 
 	return lockWallet(ctx, qtx, sortedIDs[1])
 }
 
-// lockWallet takes a row lock on the wallet with the given ID.
 func lockWallet(ctx context.Context, qtx *sqlcgen.Queries, walletID string) error {
 	_, err := qtx.LockWalletByID(ctx, walletID)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -94,8 +155,6 @@ func lockWallet(ctx context.Context, qtx *sqlcgen.Queries, walletID string) erro
 	return err
 }
 
-// moveFunds checks the source balance and applies the debit/credit. Callers
-// must hold row locks on both wallets before calling this.
 func moveFunds(ctx context.Context, qtx *sqlcgen.Queries, fromWalletID, toWalletID string, amount float64) error {
 	fromBalance, err := qtx.GetWalletBalance(ctx, fromWalletID)
 	if err != nil {
@@ -114,39 +173,21 @@ func moveFunds(ctx context.Context, qtx *sqlcgen.Queries, fromWalletID, toWallet
 	return nil
 }
 
-func insertTransferWithLedger(ctx context.Context, qtx *sqlcgen.Queries, idempotencyKey, fromWalletID, toWalletID string, amount float64) (*domain.Transfer, error) {
-	t, err := qtx.InsertTransfer(ctx, sqlcgen.InsertTransferParams{
-		IdempotencyKey: idempotencyKey,
-		FromWalletID:   fromWalletID,
-		ToWalletID:     toWalletID,
-		Amount:         amount,
-	})
-	if err != nil {
-		var pqErr *pq.Error
-		if errors.As(err, &pqErr) && pqErr.Code == uniqueViolationCode {
-			return nil, domain.ErrIdempotencyKeyConflict
-		}
-		return nil, err
-	}
-
+func insertLedgerEntries(ctx context.Context, qtx *sqlcgen.Queries, transferID, fromWalletID, toWalletID string, amount float64) error {
 	if err := qtx.InsertLedgerEntry(ctx, sqlcgen.InsertLedgerEntryParams{
-		TransferID: t.ID,
+		TransferID: transferID,
 		WalletID:   fromWalletID,
 		EntryType:  string(domain.LedgerDebit),
 		Amount:     amount,
 	}); err != nil {
-		return nil, err
+		return err
 	}
-	if err := qtx.InsertLedgerEntry(ctx, sqlcgen.InsertLedgerEntryParams{
-		TransferID: t.ID,
+	return qtx.InsertLedgerEntry(ctx, sqlcgen.InsertLedgerEntryParams{
+		TransferID: transferID,
 		WalletID:   toWalletID,
 		EntryType:  string(domain.LedgerCredit),
 		Amount:     amount,
-	}); err != nil {
-		return nil, err
-	}
-
-	return toDomainTransfer(t), nil
+	})
 }
 
 func toDomainTransfer(t sqlcgen.Transfer) *domain.Transfer {

@@ -3,9 +3,21 @@ SELECT id, idempotency_key, from_wallet_id, to_wallet_id, amount, status, failur
 FROM transfers
 WHERE idempotency_key = $1;
 
--- name: InsertTransfer :one
+-- name: InsertPendingTransfer :one
 INSERT INTO transfers (idempotency_key, from_wallet_id, to_wallet_id, amount, status)
-VALUES ($1, $2, $3, $4, 'PROCESSED')
+VALUES ($1, $2, $3, $4, 'PENDING')
+RETURNING id, idempotency_key, from_wallet_id, to_wallet_id, amount, status, failure_reason, created_at, updated_at;
+
+-- name: MarkTransferProcessed :one
+UPDATE transfers
+SET status = 'PROCESSED', updated_at = now()
+WHERE id = $1 AND status = 'PENDING'
+RETURNING id, idempotency_key, from_wallet_id, to_wallet_id, amount, status, failure_reason, created_at, updated_at;
+
+-- name: MarkTransferFailed :one
+UPDATE transfers
+SET status = 'FAILED', failure_reason = $2, updated_at = now()
+WHERE id = $1 AND status = 'PENDING'
 RETURNING id, idempotency_key, from_wallet_id, to_wallet_id, amount, status, failure_reason, created_at, updated_at;
 
 -- name: InsertLedgerEntry :exec

@@ -1,6 +1,7 @@
 package construct
 
 import (
+	"context"
 	"errors"
 	"net/http"
 
@@ -23,6 +24,7 @@ var (
 	ErrInsufficientBalance    = utils.NewCustomError(http.StatusUnprocessableEntity, domain.ErrInsufficientBalance.Error())
 	ErrWalletNotFound         = utils.NewCustomError(http.StatusNotFound, domain.ErrWalletNotFound.Error())
 	ErrIdempotencyKeyConflict = utils.NewCustomError(http.StatusConflict, domain.ErrIdempotencyKeyConflict.Error())
+	ErrTransferTimeout        = utils.NewCustomError(http.StatusGatewayTimeout, "transfer timed out, retry with the same idempotency key to check status")
 )
 
 func MapTransferError(err error) error {
@@ -35,6 +37,8 @@ func MapTransferError(err error) error {
 		return ErrSameWallet
 	case errors.Is(err, domain.ErrIdempotencyKeyConflict):
 		return ErrIdempotencyKeyConflict
+	case errors.Is(err, context.DeadlineExceeded):
+		return ErrTransferTimeout
 	default:
 		return ErrTransferFailed
 	}
