@@ -46,14 +46,3 @@ CREATE TABLE IF NOT EXISTS ledger_entries (
 );
 
 CREATE INDEX IF NOT EXISTS idx_ledger_entries_wallet ON ledger_entries(wallet_id);
-
--- Records the outcome of a request keyed by idempotency key so retries with
--- the same key return the original response without re-executing side effects.
-CREATE TABLE IF NOT EXISTS idempotency_records (
-    idempotency_key     TEXT PRIMARY KEY,
-    request_fingerprint TEXT NOT NULL,
-    transfer_id         UUID REFERENCES transfers(id),
-    response_status     INT,
-    response_body       JSONB,
-    created_at          TIMESTAMPTZ NOT NULL DEFAULT now()
-);
