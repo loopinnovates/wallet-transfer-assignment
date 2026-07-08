@@ -1,4 +1,4 @@
-.PHONY: run build test test-race lint db-up db-down migrate-up migrate-down test-coverage deploy
+.PHONY: run build test test-race lint db-up db-down migrate-up migrate-down test-coverage check-test-coverage-html deploy
 
 DATABASE_URL ?= postgres://wallet:wallet@localhost:5432/wallet_transfer?sslmode=disable
 COVERAGE_THRESHOLD := 80
@@ -48,3 +48,8 @@ build: migrate-up
 
 lint:
 	golangci-lint run --timeout 5m
+
+check-test-coverage-html:
+	@mkdir -p coverage
+	go test $(COVERAGE_PKGS) -coverprofile=$(COVERAGE_OUT)
+	go tool cover -html=$(COVERAGE_OUT) -o coverage/coverage.html

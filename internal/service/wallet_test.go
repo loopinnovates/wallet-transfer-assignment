@@ -3,6 +3,7 @@ package service_test
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/loopinnovates/wallet-transfer-assignment/internal/domain"
 	"github.com/loopinnovates/wallet-transfer-assignment/internal/service"
@@ -11,202 +12,56 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
-func TestWalletService_TransferFunds(t *testing.T) {
-	ctx := context.Background()
-
+func newWalletService() (*service.WalletService, *testutils.MockWalletRepository, *testutils.MockTransferRepository) {
 	mockWalletRepo := &testutils.MockWalletRepository{}
 	mockTransferRepo := &testutils.MockTransferRepository{}
-
-	mockWalletRepo.On("GetByID", ctx, "wallet1").Return(&domain.Wallet{ID: "wallet1", Balance: 200.0}, nil)
-
-	mockWalletRepo.On("GetByID", ctx, "wallet2").Return(&domain.Wallet{ID: "wallet2", Balance: 50.0}, nil)
-
-	mockTransferRepo.On("GetByIdempotencyKey", ctx, "unique-key-123").Return(nil, nil)
-
-	mockTransferRepo.On("ExecuteTransfer", ctx, "unique-key-123", "wallet1", "wallet2", 10000.0, mock.AnythingOfType("int64")).Return(&domain.Transfer{ID: "txn_123", Status: "success"}, nil)
-
-	walletService := service.WalletService{
+	return &service.WalletService{
 		WalletRepo:   mockWalletRepo,
 		TransferRepo: mockTransferRepo,
-	}
+	}, mockWalletRepo, mockTransferRepo
+}
 
-	fromWalletID := "wallet1"
-	toWalletID := "wallet2"
-	amount := 100.0
-	idempotencyKey := "unique-key-123"
+func TestWalletService_TransferFunds_Success(t *testing.T) {
+	ctx := context.Background()
+	walletService, _, mockTransferRepo := newWalletService()
 
-	transactionID, status, timestamp, err := walletService.TransferFunds(ctx, idempotencyKey, fromWalletID, toWalletID, amount)
+	mockTransferRepo.On("ExecuteTransfer", ctx, "unique-key-123", "wallet1", "wallet2", 100.0, mock.AnythingOfType("int64")).
+		Return(&domain.Transfer{ID: "txn_123", Status: domain.TransferProcessed}, nil)
+
+	transactionID, status, timestamp, err := walletService.TransferFunds(ctx, "unique-key-123", "wallet1", "wallet2", 100.0)
+
 	assert.NoError(t, err)
-	assert.NotNil(t, transactionID)
-	assert.Equal(t, "success", status)
+	assert.Equal(t, "txn_123", transactionID)
+	assert.Equal(t, string(domain.TransferProcessed), status)
+	assert.NotZero(t, timestamp)
+	mockTransferRepo.AssertExpectations(t)
+}
+
+func TestWalletService_TransferFunds_Pending(t *testing.T) {
+	ctx := context.Background()
+	walletService, _, mockTransferRepo := newWalletService()
+
+	mockTransferRepo.On("ExecuteTransfer", ctx, "unique-key-123", "wallet1", "wallet2", 100.0, mock.AnythingOfType("int64")).
+		Return(&domain.Transfer{ID: "txn_123", Status: domain.TransferPending}, nil)
+
+	transactionID, status, timestamp, err := walletService.TransferFunds(ctx, "unique-key-123", "wallet1", "wallet2", 100.0)
+
+	assert.NoError(t, err)
+	assert.Equal(t, "txn_123", transactionID)
+	assert.Equal(t, string(domain.TransferPending), status)
 	assert.NotZero(t, timestamp)
 }
 
-func TestWalletService_TransferFunds_InsufficientBalance(t *testing.T) {
+func TestWalletService_TransferFunds_ExecuteTransferStatusFailed(t *testing.T) {
 	ctx := context.Background()
+	walletService, _, mockTransferRepo := newWalletService()
 
-	mockWalletRepo := &testutils.MockWalletRepository{}
-	mockTransferRepo := &testutils.MockTransferRepository{}
+	mockTransferRepo.On("ExecuteTransfer", ctx, "unique-key-123", "wallet1", "wallet2", 100.0, mock.AnythingOfType("int64")).
+		Return(&domain.Transfer{ID: "txn_123", Status: domain.TransferFailed}, nil)
 
-	mockWalletRepo.On("GetByID", ctx, "wallet1").Return(&domain.Wallet{ID: "wallet1", Balance: 50.0}, nil)
+	transactionID, status, timestamp, err := walletService.TransferFunds(ctx, "unique-key-123", "wallet1", "wallet2", 100.0)
 
-	walletService := service.WalletService{
-		WalletRepo:   mockWalletRepo,
-		TransferRepo: mockTransferRepo,
-	}
-
-	fromWalletID := "wallet1"
-	toWalletID := "wallet2"
-	amount := 100.0
-	idempotencyKey := "unique-key-123"
-
-	transactionID, status, timestamp, err := walletService.TransferFunds(ctx, idempotencyKey, fromWalletID, toWalletID, amount)
-	assert.Error(t, err)
-	assert.Equal(t, domain.ErrInsufficientBalance, err)
-	assert.Empty(t, transactionID)
-	assert.Empty(t, status)
-	assert.Zero(t, timestamp)
-}
-
-func TestWalletService_TransferFunds_SameWallet(t *testing.T) {
-	ctx := context.Background()
-
-	mockWalletRepo := &testutils.MockWalletRepository{}
-	mockTransferRepo := &testutils.MockTransferRepository{}
-
-	mockWalletRepo.On("GetByID", ctx, "wallet1").Return(&domain.Wallet{ID: "wallet1", Balance: 200.0}, nil)
-
-	walletService := service.WalletService{
-		WalletRepo:   mockWalletRepo,
-		TransferRepo: mockTransferRepo,
-	}
-
-	fromWalletID := "wallet1"
-	toWalletID := "wallet1" // Same wallet ID to trigger validation error
-	amount := 100.0
-	idempotencyKey := "unique-key-123"
-
-	transactionID, status, timestamp, err := walletService.TransferFunds(ctx, idempotencyKey, fromWalletID, toWalletID, amount)
-	assert.Error(t, err)
-	assert.Equal(t, domain.ErrSameWallet, err)
-	assert.Empty(t, transactionID)
-	assert.Empty(t, status)
-	assert.Zero(t, timestamp)
-}
-
-func TestWalletService_TransferFunds_IdempotencyKeyConflict(t *testing.T) {
-	ctx := context.Background()
-
-	mockWalletRepo := &testutils.MockWalletRepository{}
-	mockTransferRepo := &testutils.MockTransferRepository{}
-
-	mockWalletRepo.On("GetByID", ctx, "wallet1").Return(&domain.Wallet{ID: "wallet1", Balance: 200.0}, nil)
-
-	mockWalletRepo.On("GetByID", ctx, "wallet2").Return(&domain.Wallet{ID: "wallet2", Balance: 50.0}, nil)
-
-	mockTransferRepo.On("GetByIdempotencyKey", ctx, "unique-key-123").Return(&domain.Transfer{ID: "txn_123", Status: "success"}, nil)
-
-	walletService := service.WalletService{
-		WalletRepo:   mockWalletRepo,
-		TransferRepo: mockTransferRepo,
-	}
-
-	fromWalletID := "wallet1"
-	toWalletID := "wallet2"
-	amount := 100.0
-	idempotencyKey := "unique-key-123"
-
-	transactionID, status, timestamp, err := walletService.TransferFunds(ctx, idempotencyKey, fromWalletID, toWalletID, amount)
-	assert.Error(t, err)
-	assert.Equal(t, domain.ErrIdempotencyKeyConflict, err)
-	assert.Empty(t, transactionID)
-	assert.Empty(t, status)
-	assert.Zero(t, timestamp)
-}
-
-func TestWalletService_TransferFunds_TransferExecutionError(t *testing.T) {
-	ctx := context.Background()
-
-	mockWalletRepo := &testutils.MockWalletRepository{}
-	mockTransferRepo := &testutils.MockTransferRepository{}
-
-	mockWalletRepo.On("GetByID", ctx, "wallet1").Return(&domain.Wallet{ID: "wallet1", Balance: 200.0}, nil)
-
-	mockWalletRepo.On("GetByID", ctx, "wallet2").Return(&domain.Wallet{ID: "wallet2", Balance: 50.0}, nil)
-
-	mockTransferRepo.On("GetByIdempotencyKey", ctx, "unique-key-123").Return(nil, nil)
-
-	mockTransferRepo.On("ExecuteTransfer", ctx, "unique-key-123", "wallet1", "wallet2", 10000.0, mock.AnythingOfType("int64")).Return(nil, domain.ErrSomethingWentWrong)
-
-	walletService := service.WalletService{
-		WalletRepo:   mockWalletRepo,
-		TransferRepo: mockTransferRepo,
-	}
-
-	fromWalletID := "wallet1"
-	toWalletID := "wallet2"
-	amount := 100.0
-	idempotencyKey := "unique-key-123"
-
-	transactionID, status, timestamp, err := walletService.TransferFunds(ctx, idempotencyKey, fromWalletID, toWalletID, amount)
-	assert.Error(t, err)
-	assert.Equal(t, domain.ErrSomethingWentWrong, err)
-	assert.Empty(t, transactionID)
-	assert.Empty(t, status)
-	assert.Zero(t, timestamp)
-}
-
-func TestWalletService_TransferFunds_WalletRepoError(t *testing.T) {
-	ctx := context.Background()
-
-	mockWalletRepo := &testutils.MockWalletRepository{}
-	mockTransferRepo := &testutils.MockTransferRepository{}
-
-	mockWalletRepo.On("GetByID", ctx, "wallet1").Return(nil, domain.ErrSomethingWentWrong)
-
-	walletService := service.WalletService{
-		WalletRepo:   mockWalletRepo,
-		TransferRepo: mockTransferRepo,
-	}
-
-	fromWalletID := "wallet1"
-	toWalletID := "wallet2"
-	amount := 100.0
-	idempotencyKey := "unique-key-123"
-
-	transactionID, status, timestamp, err := walletService.TransferFunds(ctx, idempotencyKey, fromWalletID, toWalletID, amount)
-	assert.Error(t, err)
-	assert.Equal(t, domain.ErrSomethingWentWrong, err)
-	assert.Empty(t, transactionID)
-	assert.Empty(t, status)
-	assert.Zero(t, timestamp)
-}
-
-func TestWalletService_TransferFunds_TransferRepoError(t *testing.T) {
-	ctx := context.Background()
-
-	mockWalletRepo := &testutils.MockWalletRepository{}
-	mockTransferRepo := &testutils.MockTransferRepository{}
-
-	mockWalletRepo.On("GetByID", ctx, "wallet1").Return(&domain.Wallet{ID: "wallet1", Balance: 200.0}, nil)
-
-	mockWalletRepo.On("GetByID", ctx, "wallet2").Return(&domain.Wallet{ID: "wallet2", Balance: 50.0}, nil)
-
-	mockTransferRepo.On("GetByIdempotencyKey", ctx, "unique-key-123").Return(nil, domain.ErrSomethingWentWrong)
-
-	walletService := service.WalletService{
-		WalletRepo:   mockWalletRepo,
-		TransferRepo: mockTransferRepo,
-	}
-
-	fromWalletID := "wallet1"
-	toWalletID := "wallet2"
-	amount := 100.0
-	idempotencyKey := "unique-key-123"
-
-	transactionID, status, timestamp, err := walletService.TransferFunds(ctx, idempotencyKey, fromWalletID, toWalletID, amount)
-	assert.Error(t, err)
-	assert.Equal(t, domain.ErrSomethingWentWrong, err)
+	assert.ErrorIs(t, err, domain.ErrTransferFailed)
 	assert.Empty(t, transactionID)
 	assert.Empty(t, status)
 	assert.Zero(t, timestamp)
@@ -214,122 +69,141 @@ func TestWalletService_TransferFunds_TransferRepoError(t *testing.T) {
 
 func TestWalletService_TransferFunds_ExecuteTransferReturnsNil(t *testing.T) {
 	ctx := context.Background()
+	walletService, _, mockTransferRepo := newWalletService()
 
-	mockWalletRepo := &testutils.MockWalletRepository{}
-	mockTransferRepo := &testutils.MockTransferRepository{}
+	mockTransferRepo.On("ExecuteTransfer", ctx, "unique-key-123", "wallet1", "wallet2", 100.0, mock.AnythingOfType("int64")).
+		Return(nil, nil)
 
-	mockWalletRepo.On("GetByID", ctx, "wallet1").Return(&domain.Wallet{ID: "wallet1", Balance: 200.0}, nil)
+	transactionID, status, timestamp, err := walletService.TransferFunds(ctx, "unique-key-123", "wallet1", "wallet2", 100.0)
 
-	mockWalletRepo.On("GetByID", ctx, "wallet2").Return(&domain.Wallet{ID: "wallet2", Balance: 50.0}, nil)
-
-	mockTransferRepo.On("GetByIdempotencyKey", ctx, "unique-key-123").Return(nil, nil)
-
-	mockTransferRepo.On("ExecuteTransfer", ctx, "unique-key-123", "wallet1", "wallet2", 10000.0, mock.AnythingOfType("int64")).Return(nil, nil)
-
-	walletService := service.WalletService{
-		WalletRepo:   mockWalletRepo,
-		TransferRepo: mockTransferRepo,
-	}
-
-	fromWalletID := "wallet1"
-	toWalletID := "wallet2"
-	amount := 100.0
-	idempotencyKey := "unique-key-123"
-
-	transactionID, status, timestamp, err := walletService.TransferFunds(ctx, idempotencyKey, fromWalletID, toWalletID, amount)
-	assert.Error(t, err)
-	assert.Equal(t, domain.ErrSomethingWentWrong, err)
+	assert.ErrorIs(t, err, domain.ErrSomethingWentWrong)
 	assert.Empty(t, transactionID)
 	assert.Empty(t, status)
 	assert.Zero(t, timestamp)
 }
 
-func TestWalletService_TransferFunds_ExecuteTransferStatusFailed(t *testing.T) {
+func TestWalletService_TransferFunds_ExecuteTransferError(t *testing.T) {
 	ctx := context.Background()
+	walletService, _, mockTransferRepo := newWalletService()
 
-	mockWalletRepo := &testutils.MockWalletRepository{}
-	mockTransferRepo := &testutils.MockTransferRepository{}
+	mockTransferRepo.On("ExecuteTransfer", ctx, "unique-key-123", "wallet1", "wallet2", 100.0, mock.AnythingOfType("int64")).
+		Return(nil, domain.ErrInsufficientBalance)
 
-	mockWalletRepo.On("GetByID", ctx, "wallet1").Return(&domain.Wallet{ID: "wallet1", Balance: 200.0}, nil)
+	transactionID, status, timestamp, err := walletService.TransferFunds(ctx, "unique-key-123", "wallet1", "wallet2", 100.0)
 
-	mockWalletRepo.On("GetByID", ctx, "wallet2").Return(&domain.Wallet{ID: "wallet2", Balance: 50.0}, nil)
-
-	mockTransferRepo.On("GetByIdempotencyKey", ctx, "unique-key-123").Return(nil, nil)
-
-	mockTransferRepo.On("ExecuteTransfer", ctx, "unique-key-123", "wallet1", "wallet2", 10000.0, mock.AnythingOfType("int64")).Return(&domain.Transfer{ID: "txn_123", Status: "failed"}, nil)
-
-	walletService := service.WalletService{
-		WalletRepo:   mockWalletRepo,
-		TransferRepo: mockTransferRepo,
-	}
-
-	fromWalletID := "wallet1"
-	toWalletID := "wallet2"
-	amount := 100.0
-	idempotencyKey := "unique-key-123"
-
-	transactionID, status, timestamp, err := walletService.TransferFunds(ctx, idempotencyKey, fromWalletID, toWalletID, amount)
-	assert.Error(t, err)
-	assert.Equal(t, domain.ErrTransferFailed, err)
+	assert.ErrorIs(t, err, domain.ErrInsufficientBalance)
 	assert.Empty(t, transactionID)
 	assert.Empty(t, status)
 	assert.Zero(t, timestamp)
 }
 
-func TestWalletService_TransferFunds_ExecuteTransferStatusPending(t *testing.T) {
+// A retry with the exact same parameters as the original transfer must
+// return the original result instead of erroring.
+func TestWalletService_TransferFunds_IdempotentReplay_SameParams(t *testing.T) {
 	ctx := context.Background()
+	walletService, _, mockTransferRepo := newWalletService()
 
-	mockWalletRepo := &testutils.MockWalletRepository{}
-	mockTransferRepo := &testutils.MockTransferRepository{}
-
-	mockWalletRepo.On("GetByID", ctx, "wallet1").Return(&domain.Wallet{ID: "wallet1", Balance: 200.0}, nil)
-
-	mockWalletRepo.On("GetByID", ctx, "wallet2").Return(&domain.Wallet{ID: "wallet2", Balance: 50.0}, nil)
-
-	mockTransferRepo.On("GetByIdempotencyKey", ctx, "unique-key-123").Return(nil, nil)
-
-	mockTransferRepo.On("ExecuteTransfer", ctx, "unique-key-123", "wallet1", "wallet2", 10000.0, mock.AnythingOfType("int64")).Return(&domain.Transfer{ID: "txn_unique-key-123", Status: "pending"}, nil)
-
-	walletService := service.WalletService{
-		WalletRepo:   mockWalletRepo,
-		TransferRepo: mockTransferRepo,
+	createdAt := time.Now().Add(-time.Minute)
+	existing := &domain.Transfer{
+		ID:           "txn_123",
+		FromWalletID: "wallet1",
+		ToWalletID:   "wallet2",
+		Amount:       100.0,
+		Status:       domain.TransferProcessed,
+		CreatedAt:    createdAt,
 	}
 
-	fromWalletID := "wallet1"
-	toWalletID := "wallet2"
-	amount := 100.0
-	idempotencyKey := "unique-key-123"
+	mockTransferRepo.On("ExecuteTransfer", ctx, "unique-key-123", "wallet1", "wallet2", 100.0, mock.AnythingOfType("int64")).
+		Return(nil, domain.ErrIdempotencyKeyConflict)
+	mockTransferRepo.On("GetByIdempotencyKey", ctx, "unique-key-123").Return(existing, nil)
 
-	transactionID, status, timestamp, err := walletService.TransferFunds(ctx, idempotencyKey, fromWalletID, toWalletID, amount)
+	transactionID, status, timestamp, err := walletService.TransferFunds(ctx, "unique-key-123", "wallet1", "wallet2", 100.0)
+
 	assert.NoError(t, err)
-	assert.Equal(t, "txn_unique-key-123", transactionID)
-	assert.Equal(t, "pending", status)
-	assert.NotZero(t, timestamp)
+	assert.Equal(t, "txn_123", transactionID)
+	assert.Equal(t, string(domain.TransferProcessed), status)
+	assert.Equal(t, createdAt.UnixMilli(), timestamp)
 }
 
-func TestWalletService_TransferFunds_GetByIdToWalletError(t *testing.T) {
+// A retry with the same key but different parameters is a genuine conflict.
+func TestWalletService_TransferFunds_IdempotentReplay_DifferentParams(t *testing.T) {
 	ctx := context.Background()
+	walletService, _, mockTransferRepo := newWalletService()
 
-	mockWalletRepo := &testutils.MockWalletRepository{}
-	mockTransferRepo := &testutils.MockTransferRepository{}
-
-	mockWalletRepo.On("GetByID", ctx, "wallet1").Return(&domain.Wallet{ID: "wallet1", Balance: 200.0}, nil)
-
-	mockWalletRepo.On("GetByID", ctx, "wallet2").Return(nil, domain.ErrSomethingWentWrong)
-
-	walletService := service.WalletService{
-		WalletRepo:   mockWalletRepo,
-		TransferRepo: mockTransferRepo,
+	existing := &domain.Transfer{
+		ID:           "txn_123",
+		FromWalletID: "wallet1",
+		ToWalletID:   "wallet2",
+		Amount:       50.0, // different amount than the retried request
+		Status:       domain.TransferProcessed,
+		CreatedAt:    time.Now(),
 	}
 
-	fromWalletID := "wallet1"
-	toWalletID := "wallet2"
-	amount := 100.0
-	idempotencyKey := "unique-key-123"
+	mockTransferRepo.On("ExecuteTransfer", ctx, "unique-key-123", "wallet1", "wallet2", 100.0, mock.AnythingOfType("int64")).
+		Return(nil, domain.ErrIdempotencyKeyConflict)
+	mockTransferRepo.On("GetByIdempotencyKey", ctx, "unique-key-123").Return(existing, nil)
 
-	transactionID, status, timestamp, err := walletService.TransferFunds(ctx, idempotencyKey, fromWalletID, toWalletID, amount)
-	assert.Error(t, err)
-	assert.Equal(t, domain.ErrSomethingWentWrong, err)
+	transactionID, status, timestamp, err := walletService.TransferFunds(ctx, "unique-key-123", "wallet1", "wallet2", 100.0)
+
+	assert.ErrorIs(t, err, domain.ErrIdempotencyKeyConflict)
+	assert.Empty(t, transactionID)
+	assert.Empty(t, status)
+	assert.Zero(t, timestamp)
+}
+
+// A replayed original transfer that had failed should still surface as a failure.
+func TestWalletService_TransferFunds_IdempotentReplay_OriginalFailed(t *testing.T) {
+	ctx := context.Background()
+	walletService, _, mockTransferRepo := newWalletService()
+
+	existing := &domain.Transfer{
+		ID:           "txn_123",
+		FromWalletID: "wallet1",
+		ToWalletID:   "wallet2",
+		Amount:       100.0,
+		Status:       domain.TransferFailed,
+		CreatedAt:    time.Now(),
+	}
+
+	mockTransferRepo.On("ExecuteTransfer", ctx, "unique-key-123", "wallet1", "wallet2", 100.0, mock.AnythingOfType("int64")).
+		Return(nil, domain.ErrIdempotencyKeyConflict)
+	mockTransferRepo.On("GetByIdempotencyKey", ctx, "unique-key-123").Return(existing, nil)
+
+	transactionID, status, timestamp, err := walletService.TransferFunds(ctx, "unique-key-123", "wallet1", "wallet2", 100.0)
+
+	assert.ErrorIs(t, err, domain.ErrTransferFailed)
+	assert.Empty(t, transactionID)
+	assert.Empty(t, status)
+	assert.Zero(t, timestamp)
+}
+
+func TestWalletService_TransferFunds_IdempotentReplay_LookupError(t *testing.T) {
+	ctx := context.Background()
+	walletService, _, mockTransferRepo := newWalletService()
+
+	mockTransferRepo.On("ExecuteTransfer", ctx, "unique-key-123", "wallet1", "wallet2", 100.0, mock.AnythingOfType("int64")).
+		Return(nil, domain.ErrIdempotencyKeyConflict)
+	mockTransferRepo.On("GetByIdempotencyKey", ctx, "unique-key-123").Return(nil, domain.ErrSomethingWentWrong)
+
+	transactionID, status, timestamp, err := walletService.TransferFunds(ctx, "unique-key-123", "wallet1", "wallet2", 100.0)
+
+	assert.ErrorIs(t, err, domain.ErrSomethingWentWrong)
+	assert.Empty(t, transactionID)
+	assert.Empty(t, status)
+	assert.Zero(t, timestamp)
+}
+
+func TestWalletService_TransferFunds_IdempotentReplay_NotFound(t *testing.T) {
+	ctx := context.Background()
+	walletService, _, mockTransferRepo := newWalletService()
+
+	mockTransferRepo.On("ExecuteTransfer", ctx, "unique-key-123", "wallet1", "wallet2", 100.0, mock.AnythingOfType("int64")).
+		Return(nil, domain.ErrIdempotencyKeyConflict)
+	mockTransferRepo.On("GetByIdempotencyKey", ctx, "unique-key-123").Return(nil, nil)
+
+	transactionID, status, timestamp, err := walletService.TransferFunds(ctx, "unique-key-123", "wallet1", "wallet2", 100.0)
+
+	assert.ErrorIs(t, err, domain.ErrIdempotencyKeyConflict)
 	assert.Empty(t, transactionID)
 	assert.Empty(t, status)
 	assert.Zero(t, timestamp)
