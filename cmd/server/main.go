@@ -3,23 +3,17 @@ package main
 import (
 	"log"
 	"net/http"
-	"os"
+
+	"github.com/loopinnovates/wallet-transfer-assignment/internal/config"
+	"github.com/loopinnovates/wallet-transfer-assignment/internal/router"
 )
 
 func main() {
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
-	}
+	appConfig := config.AppConfig()
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("ok"))
-	})
-
-	log.Printf("listening on :%s", port)
-	if err := http.ListenAndServe(":"+port, mux); err != nil {
+	routes := router.Routes()
+	log.Printf("listening on :%s", appConfig.Port)
+	if err := http.ListenAndServe(":"+appConfig.Port, routes); err != nil {
 		log.Fatal(err)
 	}
 }
