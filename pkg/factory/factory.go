@@ -21,7 +21,10 @@ func NewFactory(appConfig *config.Config) (*Factory, error) {
 
 	writeReplica, err := getWriteReplica(appConfig.WritePGURI)
 	if err != nil {
-		readReplica.Close()
+		err2 := readReplica.Close()
+		if err2 != nil {
+			fmt.Printf("Error closing read replica: %v", err2)
+		}
 		return nil, fmt.Errorf("connecting to write replica: %w", err)
 	}
 
@@ -41,9 +44,15 @@ func getWriteReplica(uri string) (*sql.DB, error) {
 
 func (f *Factory) Close() {
 	if f.ReadPGReplica != nil {
-		f.ReadPGReplica.Close()
+		err := f.ReadPGReplica.Close()
+		if err != nil {
+			fmt.Printf("Error closing read replica: %v", err)
+		}
 	}
 	if f.WritePGReplica != nil {
-		f.WritePGReplica.Close()
+		err := f.WritePGReplica.Close()
+		if err != nil {
+			fmt.Printf("Error closing write replica: %v", err)
+		}
 	}
 }

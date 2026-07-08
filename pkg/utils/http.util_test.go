@@ -68,7 +68,9 @@ func TestWriteError_CheckContentType(t *testing.T) {
 func TestWrap(t *testing.T) {
 
 	simpleHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("Hello, World!"))
+		numberOfBytes, err := w.Write([]byte("Hello, World!"))
+		assert.NoError(t, err)
+		assert.Equal(t, 13, numberOfBytes)
 	})
 
 	customHeaderMiddleware := func(next http.Handler) http.Handler {
@@ -91,7 +93,9 @@ func TestWrap(t *testing.T) {
 
 func TestWrap_MultipleMiddlewares(t *testing.T) {
 	simpleHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("Hello, World!"))
+		numberOfBytes, err := w.Write([]byte("Hello, World!"))
+		assert.NoError(t, err)
+		assert.Equal(t, 13, numberOfBytes)
 	})
 
 	middleware1 := func(next http.Handler) http.Handler {
