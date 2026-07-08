@@ -59,7 +59,7 @@ func TestTransferHandler_InvalidRequest_WalletIDCannotBeSame(t *testing.T) {
 	handler.TransferHandler(&mockWalletSvc).ServeHTTP(rec, req)
 
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
-	assert.Contains(t, rec.Body.String(), "from_wallet_id and to_wallet_id cannot be the same")
+	assert.Contains(t, rec.Body.String(), "from and to wallet cannot be the same")
 }
 
 func TestTransferHandler_InvalidRequest_NegativeAmount(t *testing.T) {
@@ -134,7 +134,7 @@ func TestTransferHandler_ServiceError(t *testing.T) {
 	handler.TransferHandler(&mockWalletSvc).ServeHTTP(rec, req)
 
 	assert.Equal(t, http.StatusInternalServerError, rec.Code)
-	assert.Contains(t, rec.Body.String(), "failed to transfer funds")
+	assert.Contains(t, rec.Body.String(), "transfer failed")
 
 	mockWalletSvc.AssertExpectations(t)
 }
