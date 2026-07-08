@@ -12,7 +12,7 @@ func GetEnvInt(key string, defaultVal int) int {
 	}
 	intVal, err := strconv.Atoi(val)
 	if err != nil {
-		panic(err)
+		panic(err) // intentionally throws panic
 	}
 	return intVal
 }

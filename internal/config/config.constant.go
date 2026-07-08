@@ -5,6 +5,8 @@ const (
 	PortKey = "PORT"
 )
 
-// PostgreSQL Constants
-
-const ()
+// Database Constants
+const (
+	ReadPGURIKey  = "READ_PG_URI"
+	WritePGURIKey = "WRITE_PG_URI"
+)
