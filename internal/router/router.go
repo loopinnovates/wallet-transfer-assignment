@@ -26,11 +26,15 @@ func New(rc *RouterContext) *mux.Router {
 	}
 
 	transferHandler := utils.Wrap(handler.TransferHandler(rc.WalletSvc), middleware.ConcurrencyLimit(maxConcurrent))
+	walletBalanceHandler := utils.Wrap(handler.WalletBalanceHandler(rc.WalletSvc), middleware.ConcurrencyLimit(maxConcurrent))
+	transferHistoryHandler := utils.Wrap(handler.TransferHistoryHandler(rc.WalletSvc), middleware.ConcurrencyLimit(maxConcurrent))
 
 	router := mux.NewRouter()
 	router.Use(middleware.Recover)
 	router.HandleFunc("/health", handler.Health).Methods("GET")
 	router.Handle("/transfers", transferHandler).Methods("POST")
+	router.Handle("/wallets/{id}/balance", walletBalanceHandler).Methods("GET")
+	router.Handle("/wallets/{id}/transfers", transferHistoryHandler).Methods("GET")
 
 	router.NotFoundHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		logger.Info().Str("method", r.Method).Str("path", r.URL.Path).Msg("route not found")

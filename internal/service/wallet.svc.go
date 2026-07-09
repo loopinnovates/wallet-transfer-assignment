@@ -11,6 +11,8 @@ import (
 
 type IWalletSvc interface {
 	TransferFunds(ctx context.Context, idempotencyKey string, fromWalletID string, toWalletID string, amount float64) (TransactionID string, Status string, timestamp int64, err error)
+	GetWalletBalance(ctx context.Context, walletID string) (OwnerName string, Balance float64, err error)
+	GetTransferHistory(ctx context.Context, walletID string, limit, offset int32) (transfers []*domain.Transfer, resolvedLimit int32, resolvedOffset int32, err error)
 }
 
 type WalletService struct {
@@ -50,6 +52,52 @@ func (s *WalletService) TransferFunds(ctx context.Context, idempotencyKey string
 
 	logger.Info().Str("transfer_id", transfer.ID).Str("status", string(transfer.Status)).Msg("transfer funds completed")
 	return transfer.ID, string(transfer.Status), transfer.CreatedAt.UnixMilli(), nil
+}
+
+func (s *WalletService) GetWalletBalance(ctx context.Context, walletID string) (string, float64, error) {
+	logger.Debug().Str("wallet_id", walletID).Msg("wallet balance requested")
+
+	wallet, err := s.WalletRepo.GetByID(ctx, walletID)
+	if err != nil {
+		logger.Warn().Err(err).Str("wallet_id", walletID).Msg("failed to get wallet balance")
+		return "", 0, err
+	}
+
+	logger.Info().Str("wallet_id", walletID).Float64("balance", wallet.Balance).Msg("wallet balance retrieved")
+	return wallet.OwnerName, wallet.Balance, nil
+}
+
+const (
+	defaultTransferHistoryLimit = 20
+	maxTransferHistoryLimit     = 100
+)
+
+func (s *WalletService) GetTransferHistory(ctx context.Context, walletID string, limit, offset int32) ([]*domain.Transfer, int32, int32, error) {
+	if limit <= 0 {
+		limit = defaultTransferHistoryLimit
+	}
+	if limit > maxTransferHistoryLimit {
+		limit = maxTransferHistoryLimit
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	logger.Debug().Str("wallet_id", walletID).Int32("limit", limit).Int32("offset", offset).Msg("transfer history requested")
+
+	if _, err := s.WalletRepo.GetByID(ctx, walletID); err != nil {
+		logger.Warn().Err(err).Str("wallet_id", walletID).Msg("failed to get wallet for transfer history")
+		return nil, 0, 0, err
+	}
+
+	transfers, err := s.TransferRepo.ListByWallet(ctx, walletID, limit, offset)
+	if err != nil {
+		logger.Warn().Err(err).Str("wallet_id", walletID).Msg("failed to list transfer history")
+		return nil, 0, 0, err
+	}
+
+	logger.Info().Str("wallet_id", walletID).Int("count", len(transfers)).Msg("transfer history retrieved")
+	return transfers, limit, offset, nil
 }
 
 func (s *WalletService) replayIdempotentTransfer(ctx context.Context, idempotencyKey, fromWalletID, toWalletID string, amount float64) (string, string, int64, error) {

@@ -153,6 +153,53 @@ func (q *Queries) ListPendingTransfers(ctx context.Context) ([]Transfer, error) 
 	return items, nil
 }
 
+const listTransfersByWallet = `-- name: ListTransfersByWallet :many
+SELECT id, idempotency_key, from_wallet_id, to_wallet_id, amount, status, failure_reason, created_at, updated_at
+FROM transfers
+WHERE from_wallet_id = $1 OR to_wallet_id = $1
+ORDER BY created_at DESC
+LIMIT $2 OFFSET $3
+`
+
+type ListTransfersByWalletParams struct {
+	FromWalletID string `json:"from_wallet_id"`
+	Limit        int32  `json:"limit"`
+	Offset       int32  `json:"offset"`
+}
+
+func (q *Queries) ListTransfersByWallet(ctx context.Context, arg ListTransfersByWalletParams) ([]Transfer, error) {
+	rows, err := q.db.QueryContext(ctx, listTransfersByWallet, arg.FromWalletID, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Transfer{}
+	for rows.Next() {
+		var i Transfer
+		if err := rows.Scan(
+			&i.ID,
+			&i.IdempotencyKey,
+			&i.FromWalletID,
+			&i.ToWalletID,
+			&i.Amount,
+			&i.Status,
+			&i.FailureReason,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const markTransferFailed = `-- name: MarkTransferFailed :one
 UPDATE transfers
 SET status = 'FAILED', failure_reason = $2, updated_at = now()

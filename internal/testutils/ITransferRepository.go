@@ -198,6 +198,86 @@ func (_c *MockITransferRepository_GetByIdempotencyKey_Call) RunAndReturn(run fun
 	return _c
 }
 
+// ListByWallet provides a mock function for the type MockITransferRepository
+func (_mock *MockITransferRepository) ListByWallet(ctx context.Context, walletID string, limit int32, offset int32) ([]*domain.Transfer, error) {
+	ret := _mock.Called(ctx, walletID, limit, offset)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListByWallet")
+	}
+
+	var r0 []*domain.Transfer
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, int32, int32) ([]*domain.Transfer, error)); ok {
+		return returnFunc(ctx, walletID, limit, offset)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, int32, int32) []*domain.Transfer); ok {
+		r0 = returnFunc(ctx, walletID, limit, offset)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]*domain.Transfer)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, int32, int32) error); ok {
+		r1 = returnFunc(ctx, walletID, limit, offset)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockITransferRepository_ListByWallet_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListByWallet'
+type MockITransferRepository_ListByWallet_Call struct {
+	*mock.Call
+}
+
+// ListByWallet is a helper method to define mock.On call
+//   - ctx context.Context
+//   - walletID string
+//   - limit int32
+//   - offset int32
+func (_e *MockITransferRepository_Expecter) ListByWallet(ctx any, walletID any, limit any, offset any) *MockITransferRepository_ListByWallet_Call {
+	return &MockITransferRepository_ListByWallet_Call{Call: _e.mock.On("ListByWallet", ctx, walletID, limit, offset)}
+}
+
+func (_c *MockITransferRepository_ListByWallet_Call) Run(run func(ctx context.Context, walletID string, limit int32, offset int32)) *MockITransferRepository_ListByWallet_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 int32
+		if args[2] != nil {
+			arg2 = args[2].(int32)
+		}
+		var arg3 int32
+		if args[3] != nil {
+			arg3 = args[3].(int32)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+		)
+	})
+	return _c
+}
+
+func (_c *MockITransferRepository_ListByWallet_Call) Return(transfers []*domain.Transfer, err error) *MockITransferRepository_ListByWallet_Call {
+	_c.Call.Return(transfers, err)
+	return _c
+}
+
+func (_c *MockITransferRepository_ListByWallet_Call) RunAndReturn(run func(ctx context.Context, walletID string, limit int32, offset int32) ([]*domain.Transfer, error)) *MockITransferRepository_ListByWallet_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // ListPendingTransfers provides a mock function for the type MockITransferRepository
 func (_mock *MockITransferRepository) ListPendingTransfers(ctx context.Context) ([]*domain.Transfer, error) {
 	ret := _mock.Called(ctx)

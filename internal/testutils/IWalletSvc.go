@@ -7,6 +7,7 @@ package testutils
 import (
 	"context"
 
+	"github.com/loopinnovates/wallet-transfer-assignment/internal/domain"
 	mock "github.com/stretchr/testify/mock"
 )
 
@@ -35,6 +36,170 @@ type MockIWalletSvc_Expecter struct {
 
 func (_m *MockIWalletSvc) EXPECT() *MockIWalletSvc_Expecter {
 	return &MockIWalletSvc_Expecter{mock: &_m.Mock}
+}
+
+// GetTransferHistory provides a mock function for the type MockIWalletSvc
+func (_mock *MockIWalletSvc) GetTransferHistory(ctx context.Context, walletID string, limit int32, offset int32) ([]*domain.Transfer, int32, int32, error) {
+	ret := _mock.Called(ctx, walletID, limit, offset)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetTransferHistory")
+	}
+
+	var r0 []*domain.Transfer
+	var r1 int32
+	var r2 int32
+	var r3 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, int32, int32) ([]*domain.Transfer, int32, int32, error)); ok {
+		return returnFunc(ctx, walletID, limit, offset)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, int32, int32) []*domain.Transfer); ok {
+		r0 = returnFunc(ctx, walletID, limit, offset)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]*domain.Transfer)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, int32, int32) int32); ok {
+		r1 = returnFunc(ctx, walletID, limit, offset)
+	} else {
+		r1 = ret.Get(1).(int32)
+	}
+	if returnFunc, ok := ret.Get(2).(func(context.Context, string, int32, int32) int32); ok {
+		r2 = returnFunc(ctx, walletID, limit, offset)
+	} else {
+		r2 = ret.Get(2).(int32)
+	}
+	if returnFunc, ok := ret.Get(3).(func(context.Context, string, int32, int32) error); ok {
+		r3 = returnFunc(ctx, walletID, limit, offset)
+	} else {
+		r3 = ret.Error(3)
+	}
+	return r0, r1, r2, r3
+}
+
+// MockIWalletSvc_GetTransferHistory_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetTransferHistory'
+type MockIWalletSvc_GetTransferHistory_Call struct {
+	*mock.Call
+}
+
+// GetTransferHistory is a helper method to define mock.On call
+//   - ctx context.Context
+//   - walletID string
+//   - limit int32
+//   - offset int32
+func (_e *MockIWalletSvc_Expecter) GetTransferHistory(ctx any, walletID any, limit any, offset any) *MockIWalletSvc_GetTransferHistory_Call {
+	return &MockIWalletSvc_GetTransferHistory_Call{Call: _e.mock.On("GetTransferHistory", ctx, walletID, limit, offset)}
+}
+
+func (_c *MockIWalletSvc_GetTransferHistory_Call) Run(run func(ctx context.Context, walletID string, limit int32, offset int32)) *MockIWalletSvc_GetTransferHistory_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 int32
+		if args[2] != nil {
+			arg2 = args[2].(int32)
+		}
+		var arg3 int32
+		if args[3] != nil {
+			arg3 = args[3].(int32)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+		)
+	})
+	return _c
+}
+
+func (_c *MockIWalletSvc_GetTransferHistory_Call) Return(transfers []*domain.Transfer, resolvedLimit int32, resolvedOffset int32, err error) *MockIWalletSvc_GetTransferHistory_Call {
+	_c.Call.Return(transfers, resolvedLimit, resolvedOffset, err)
+	return _c
+}
+
+func (_c *MockIWalletSvc_GetTransferHistory_Call) RunAndReturn(run func(ctx context.Context, walletID string, limit int32, offset int32) ([]*domain.Transfer, int32, int32, error)) *MockIWalletSvc_GetTransferHistory_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetWalletBalance provides a mock function for the type MockIWalletSvc
+func (_mock *MockIWalletSvc) GetWalletBalance(ctx context.Context, walletID string) (string, float64, error) {
+	ret := _mock.Called(ctx, walletID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetWalletBalance")
+	}
+
+	var r0 string
+	var r1 float64
+	var r2 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) (string, float64, error)); ok {
+		return returnFunc(ctx, walletID)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) string); ok {
+		r0 = returnFunc(ctx, walletID)
+	} else {
+		r0 = ret.Get(0).(string)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string) float64); ok {
+		r1 = returnFunc(ctx, walletID)
+	} else {
+		r1 = ret.Get(1).(float64)
+	}
+	if returnFunc, ok := ret.Get(2).(func(context.Context, string) error); ok {
+		r2 = returnFunc(ctx, walletID)
+	} else {
+		r2 = ret.Error(2)
+	}
+	return r0, r1, r2
+}
+
+// MockIWalletSvc_GetWalletBalance_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetWalletBalance'
+type MockIWalletSvc_GetWalletBalance_Call struct {
+	*mock.Call
+}
+
+// GetWalletBalance is a helper method to define mock.On call
+//   - ctx context.Context
+//   - walletID string
+func (_e *MockIWalletSvc_Expecter) GetWalletBalance(ctx any, walletID any) *MockIWalletSvc_GetWalletBalance_Call {
+	return &MockIWalletSvc_GetWalletBalance_Call{Call: _e.mock.On("GetWalletBalance", ctx, walletID)}
+}
+
+func (_c *MockIWalletSvc_GetWalletBalance_Call) Run(run func(ctx context.Context, walletID string)) *MockIWalletSvc_GetWalletBalance_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockIWalletSvc_GetWalletBalance_Call) Return(OwnerName string, Balance float64, err error) *MockIWalletSvc_GetWalletBalance_Call {
+	_c.Call.Return(OwnerName, Balance, err)
+	return _c
+}
+
+func (_c *MockIWalletSvc_GetWalletBalance_Call) RunAndReturn(run func(ctx context.Context, walletID string) (string, float64, error)) *MockIWalletSvc_GetWalletBalance_Call {
+	_c.Call.Return(run)
+	return _c
 }
 
 // TransferFunds provides a mock function for the type MockIWalletSvc

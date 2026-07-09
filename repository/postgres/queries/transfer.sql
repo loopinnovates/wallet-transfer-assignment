@@ -34,3 +34,10 @@ RETURNING id, idempotency_key, from_wallet_id, to_wallet_id, amount, status, fai
 -- name: InsertLedgerEntry :exec
 INSERT INTO ledger_entries (transfer_id, wallet_id, entry_type, amount)
 VALUES ($1, $2, $3, $4);
+
+-- name: ListTransfersByWallet :many
+SELECT id, idempotency_key, from_wallet_id, to_wallet_id, amount, status, failure_reason, created_at, updated_at
+FROM transfers
+WHERE from_wallet_id = $1 OR to_wallet_id = $1
+ORDER BY created_at DESC
+LIMIT $2 OFFSET $3;

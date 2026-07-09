@@ -20,6 +20,8 @@ var (
 	ErrInternal            = utils.NewCustomError(http.StatusInternalServerError, "something went wrong")
 	ErrInvalidRequestBody  = utils.NewCustomError(http.StatusBadRequest, "invalid request body")
 	ErrMissingTransferData = utils.NewCustomError(http.StatusBadRequest, "from_wallet_id, to_wallet_id and a positive amount are required")
+	ErrMissingWalletID     = utils.NewCustomError(http.StatusBadRequest, "wallet id is required")
+	ErrInvalidPagination   = utils.NewCustomError(http.StatusBadRequest, "limit and offset must be valid integers")
 
 	// service errors
 	ErrSameWallet             = utils.NewCustomError(http.StatusBadRequest, domain.ErrSameWallet.Error())

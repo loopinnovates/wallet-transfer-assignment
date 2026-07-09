@@ -244,6 +244,81 @@ func TestWalletService_TransferFunds_IdempotentReplay_LookupError(t *testing.T) 
 	assert.Zero(t, timestamp)
 }
 
+func TestWalletService_GetWalletBalance_Success(t *testing.T) {
+	ctx := context.Background()
+	walletService, mockWalletRepo, _ := newWalletService()
+
+	mockWalletRepo.On("GetByID", ctx, "wallet1").
+		Return(&domain.Wallet{ID: "wallet1", OwnerName: "Alice", Balance: 250.5}, nil)
+
+	ownerName, balance, err := walletService.GetWalletBalance(ctx, "wallet1")
+
+	assert.NoError(t, err)
+	assert.Equal(t, "Alice", ownerName)
+	assert.Equal(t, 250.5, balance)
+	mockWalletRepo.AssertExpectations(t)
+}
+
+func TestWalletService_GetWalletBalance_NotFound(t *testing.T) {
+	ctx := context.Background()
+	walletService, mockWalletRepo, _ := newWalletService()
+
+	mockWalletRepo.On("GetByID", ctx, "missing-wallet").Return(nil, domain.ErrWalletNotFound)
+
+	ownerName, balance, err := walletService.GetWalletBalance(ctx, "missing-wallet")
+
+	assert.ErrorIs(t, err, domain.ErrWalletNotFound)
+	assert.Empty(t, ownerName)
+	assert.Zero(t, balance)
+}
+
+func TestWalletService_GetTransferHistory_Success(t *testing.T) {
+	ctx := context.Background()
+	walletService, mockWalletRepo, mockTransferRepo := newWalletService()
+
+	mockWalletRepo.On("GetByID", ctx, "wallet1").Return(&domain.Wallet{ID: "wallet1"}, nil)
+	mockTransferRepo.On("ListByWallet", ctx, "wallet1", int32(20), int32(0)).
+		Return([]*domain.Transfer{{ID: "txn_1", Status: domain.TransferProcessed}}, nil)
+
+	transfers, limit, offset, err := walletService.GetTransferHistory(ctx, "wallet1", 0, 0)
+
+	assert.NoError(t, err)
+	assert.Len(t, transfers, 1)
+	assert.Equal(t, "txn_1", transfers[0].ID)
+	assert.Equal(t, int32(20), limit)
+	assert.Equal(t, int32(0), offset)
+	mockWalletRepo.AssertExpectations(t)
+	mockTransferRepo.AssertExpectations(t)
+}
+
+func TestWalletService_GetTransferHistory_ClampsLimitAndOffset(t *testing.T) {
+	ctx := context.Background()
+	walletService, mockWalletRepo, mockTransferRepo := newWalletService()
+
+	mockWalletRepo.On("GetByID", ctx, "wallet1").Return(&domain.Wallet{ID: "wallet1"}, nil)
+	mockTransferRepo.On("ListByWallet", ctx, "wallet1", int32(100), int32(0)).
+		Return([]*domain.Transfer{}, nil)
+
+	_, limit, offset, err := walletService.GetTransferHistory(ctx, "wallet1", 1000, -5)
+
+	assert.NoError(t, err)
+	assert.Equal(t, int32(100), limit)
+	assert.Equal(t, int32(0), offset)
+	mockTransferRepo.AssertExpectations(t)
+}
+
+func TestWalletService_GetTransferHistory_WalletNotFound(t *testing.T) {
+	ctx := context.Background()
+	walletService, mockWalletRepo, _ := newWalletService()
+
+	mockWalletRepo.On("GetByID", ctx, "missing-wallet").Return(nil, domain.ErrWalletNotFound)
+
+	transfers, _, _, err := walletService.GetTransferHistory(ctx, "missing-wallet", 0, 0)
+
+	assert.ErrorIs(t, err, domain.ErrWalletNotFound)
+	assert.Nil(t, transfers)
+}
+
 func TestWalletService_TransferFunds_IdempotentReplay_NotFound(t *testing.T) {
 	ctx := context.Background()
 	walletService, _, mockTransferRepo := newWalletService()

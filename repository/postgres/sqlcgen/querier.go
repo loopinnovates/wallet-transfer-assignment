@@ -18,6 +18,7 @@ type Querier interface {
 	InsertLedgerEntry(ctx context.Context, arg InsertLedgerEntryParams) error
 	InsertPendingTransfer(ctx context.Context, arg InsertPendingTransferParams) (Transfer, error)
 	ListPendingTransfers(ctx context.Context) ([]Transfer, error)
+	ListTransfersByWallet(ctx context.Context, arg ListTransfersByWalletParams) ([]Transfer, error)
 	LockWalletByID(ctx context.Context, id string) (string, error)
 	MarkTransferFailed(ctx context.Context, arg MarkTransferFailedParams) (Transfer, error)
 	MarkTransferProcessed(ctx context.Context, id string) (Transfer, error)

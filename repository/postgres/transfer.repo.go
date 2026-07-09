@@ -44,6 +44,27 @@ func (r *TransferRepository) GetByIdempotencyKey(ctx context.Context, key string
 	})
 }
 
+func (r *TransferRepository) ListByWallet(ctx context.Context, walletID string, limit, offset int32) ([]*domain.Transfer, error) {
+	logger.Debug().Str("wallet_id", walletID).Int32("limit", limit).Int32("offset", offset).Msg("listing transfers for wallet")
+	return withRetry(ctx, func() ([]*domain.Transfer, error) {
+		rows, err := r.readQueries.ListTransfersByWallet(ctx, sqlcgen.ListTransfersByWalletParams{
+			FromWalletID: walletID,
+			Limit:        limit,
+			Offset:       offset,
+		})
+		if err != nil {
+			logger.Warn().Err(err).Str("wallet_id", walletID).Msg("failed to list transfers for wallet")
+			return nil, err
+		}
+		transfers := make([]*domain.Transfer, len(rows))
+		for i, row := range rows {
+			transfers[i] = toDomainTransfer(row)
+		}
+		logger.Info().Str("wallet_id", walletID).Int("count", len(transfers)).Msg("listed transfers for wallet")
+		return transfers, nil
+	})
+}
+
 func (r *TransferRepository) ListPendingTransfers(ctx context.Context) ([]*domain.Transfer, error) {
 	logger.Debug().Msg("listing pending transfers")
 	return withRetry(ctx, func() ([]*domain.Transfer, error) {
