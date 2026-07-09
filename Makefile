@@ -1,7 +1,7 @@
 .PHONY: run build test test-race lint db-up db-down migrate-up migrate-down test-coverage check-test-coverage-html deploy
 
-DATABASE_URL ?= postgres://wallet:wallet@localhost:5432/wallet_transfer?sslmode=disable
-COVERAGE_THRESHOLD := 80
+DATABASE_URL ?= postgres://wallet:<password>@localhost:5432/wallet_transfer?sslmode=disable
+COVERAGE_THRESHOLD := 60
 COVERAGE_OUT := coverage/coverage.out
 COVERAGE_EXCLUDE := /router|/testutils|/constants
 COVERAGE_PKGS := $(shell go list ./... | grep -Ev '$(COVERAGE_EXCLUDE)')

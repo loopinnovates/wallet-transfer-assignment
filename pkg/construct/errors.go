@@ -13,6 +13,9 @@ var (
 	// router errors
 	ErrRouteNotFound = utils.NewCustomError(http.StatusNotFound, "route not found")
 
+	// middleware errors
+	ErrServerBusy = utils.NewCustomError(http.StatusServiceUnavailable, "server is busy, please retry")
+
 	// handler errors
 	ErrInternal            = utils.NewCustomError(http.StatusInternalServerError, "something went wrong")
 	ErrInvalidRequestBody  = utils.NewCustomError(http.StatusBadRequest, "invalid request body")

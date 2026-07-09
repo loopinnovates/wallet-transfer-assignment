@@ -12,13 +12,20 @@ import (
 	"github.com/loopinnovates/wallet-transfer-assignment/pkg/utils"
 )
 
+const defaultMaxConcurrentRequests = 200
+
 type RouterContext struct {
-	WalletSvc service.IWalletSvc
+	WalletSvc             service.IWalletSvc
+	MaxConcurrentRequests int
 }
 
 func New(rc *RouterContext) *mux.Router {
+	maxConcurrent := rc.MaxConcurrentRequests
+	if maxConcurrent <= 0 {
+		maxConcurrent = defaultMaxConcurrentRequests
+	}
 
-	transferHandler := utils.Wrap(handler.TransferHandler(rc.WalletSvc))
+	transferHandler := utils.Wrap(handler.TransferHandler(rc.WalletSvc), middleware.ConcurrencyLimit(maxConcurrent))
 
 	router := mux.NewRouter()
 	router.Use(middleware.Recover)

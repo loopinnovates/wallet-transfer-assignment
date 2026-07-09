@@ -14,12 +14,19 @@ type Factory struct {
 }
 
 func NewFactory(appConfig *config.Config) (*Factory, error) {
-	readReplica, err := getReadReplica(appConfig.ReadPGURI)
+	pool := postgres.PoolConfig{
+		MaxOpenConns:    appConfig.DBMaxOpenConns,
+		MaxIdleConns:    appConfig.DBMaxIdleConns,
+		ConnMaxLifetime: appConfig.DBConnMaxLifetime,
+		ConnMaxIdleTime: appConfig.DBConnMaxIdleTime,
+	}
+
+	readReplica, err := postgres.NewDB(appConfig.ReadPGURI, pool)
 	if err != nil {
 		return nil, fmt.Errorf("connecting to read replica: %w", err)
 	}
 
-	writeReplica, err := getWriteReplica(appConfig.WritePGURI)
+	writeReplica, err := postgres.NewDB(appConfig.WritePGURI, pool)
 	if err != nil {
 		err2 := readReplica.Close()
 		if err2 != nil {
@@ -32,14 +39,6 @@ func NewFactory(appConfig *config.Config) (*Factory, error) {
 		ReadPGReplica:  readReplica,
 		WritePGReplica: writeReplica,
 	}, nil
-}
-
-func getReadReplica(uri string) (*sql.DB, error) {
-	return postgres.NewDB(uri)
-}
-
-func getWriteReplica(uri string) (*sql.DB, error) {
-	return postgres.NewDB(uri)
 }
 
 func (f *Factory) Close() {

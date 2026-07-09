@@ -6,12 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
-	"os"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/lib/pq"
+	"github.com/loopinnovates/wallet-transfer-assignment/internal/config"
 	"github.com/loopinnovates/wallet-transfer-assignment/internal/domain"
 	"github.com/loopinnovates/wallet-transfer-assignment/internal/service"
 	"github.com/loopinnovates/wallet-transfer-assignment/repository/postgres"
@@ -25,17 +25,21 @@ func testDB(t *testing.T) *sql.DB {
 		t.Skip("skipping Postgres concurrency test in -short mode")
 	}
 
-	dsn := os.Getenv("TEST_PG_URI")
-	if dsn == "" {
-		dsn = "postgres://wallet:wallet@localhost:5432/wallet_transfer?sslmode=disable"
-	}
+	appConfig := config.AppConfig()
 
-	db, err := postgres.NewDB(dsn)
+	dsn := appConfig.ReadPGURI
+
+	// Bound the pool: these tests fire far more concurrent goroutines than
+	// Postgres's max_connections, and each ExecuteTransfer now opens two
+	// sequential connections (phase 1 + phase 2). Without a cap,
+	// database/sql happily opens one connection per goroutine and Postgres
+	// starts rejecting them with "too many clients already" - a pool
+	// exhaustion error, not a correctness bug.
+	db, err := postgres.NewDB(dsn, postgres.PoolConfig{MaxOpenConns: 50, MaxIdleConns: 50})
 	if err != nil {
 		t.Skipf("skipping: no reachable Postgres at %s (%v) - run `docker compose up -d`", dsn, err)
 	}
 
-	db.SetMaxOpenConns(50)
 	t.Cleanup(func() { _ = db.Close() })
 	return db
 }
@@ -51,18 +55,6 @@ func createTestWallet(t *testing.T, db *sql.DB, balance float64) string {
 	require.NoError(t, err)
 
 	t.Cleanup(func() {
-		// Logged, not swallowed: a silently-failed cleanup (e.g. from pool
-		// exhaustion mid-test) leaves orphaned rows that can collide with a
-		// later run's idempotency keys and produce confusing failures that
-		// have nothing to do with the code under test.
-		//
-		// Deletes ledger_entries via transfer_id, not `wallet_id = $1` -
-		// a transfer touching this wallet has a second ledger_entries row
-		// for the *other* wallet in the pair, which a wallet_id-only filter
-		// would leave behind and which then blocks the transfers delete
-		// below via ledger_entries_transfer_id_fkey. Deleting by transfer_id
-		// removes both sides regardless of which wallet's cleanup runs
-		// first.
 		if _, err := db.Exec(`DELETE FROM ledger_entries WHERE transfer_id IN (SELECT id FROM transfers WHERE from_wallet_id = $1 OR to_wallet_id = $1)`, id); err != nil {
 			t.Logf("cleanup: delete ledger_entries for wallet %s: %v", id, err)
 		}
@@ -76,10 +68,6 @@ func createTestWallet(t *testing.T, db *sql.DB, balance float64) string {
 	return id
 }
 
-// uniqueRunToken defends idempotency keys against collisions with orphaned
-// rows from a previous run whose cleanup didn't complete (e.g. it hit its
-// own pool exhaustion) - t.Name() alone repeats across invocations, so a
-// key built only from it can collide with stale leftover data.
 func uniqueRunToken() string {
 	return fmt.Sprintf("%d-%d", time.Now().UnixNano(), rand.Int63())
 }
@@ -272,11 +260,11 @@ func TestTransferFunds_FiveUsersSomeFailWithManualRetry(t *testing.T) {
 		wantErr error // nil if this transfer is expected to succeed
 	}
 	users := []user{
-		{balance: 1000, toIdx: 1, amount: 100, wantErr: nil},                        // 0 -> 1: succeeds
+		{balance: 1000, toIdx: 1, amount: 100, wantErr: nil},                         // 0 -> 1: succeeds
 		{balance: 50, toIdx: 2, amount: 200, wantErr: domain.ErrInsufficientBalance}, // 1 -> 2: fails
-		{balance: 1000, toIdx: 3, amount: 100, wantErr: nil},                        // 2 -> 3: succeeds
+		{balance: 1000, toIdx: 3, amount: 100, wantErr: nil},                         // 2 -> 3: succeeds
 		{balance: 30, toIdx: 4, amount: 500, wantErr: domain.ErrInsufficientBalance}, // 3 -> 4: fails
-		{balance: 1000, toIdx: 0, amount: 100, wantErr: nil},                        // 4 -> 0: succeeds
+		{balance: 1000, toIdx: 0, amount: 100, wantErr: nil},                         // 4 -> 0: succeeds
 	}
 
 	wallets := make([]string, len(users))

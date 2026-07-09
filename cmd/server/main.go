@@ -36,6 +36,7 @@ func main() {
 			WalletRepo:   postgres.NewWalletRepository(appFactory.ReadPGReplica, appFactory.WritePGReplica),
 			TransferRepo: transferRepo,
 		},
+		MaxConcurrentRequests: appConfig.MaxConcurrentRequests,
 	}
 
 	srv := &http.Server{
