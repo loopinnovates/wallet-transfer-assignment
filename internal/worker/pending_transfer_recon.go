@@ -2,11 +2,11 @@ package worker
 
 import (
 	"context"
-	"log"
 	"sync/atomic"
 	"time"
 
 	"github.com/loopinnovates/wallet-transfer-assignment/internal/domain"
+	"github.com/loopinnovates/wallet-transfer-assignment/pkg/logger"
 )
 
 const defaultInterval = 3 * time.Minute
@@ -58,27 +58,27 @@ func (r *PendingTransferRecon) Run(ctx context.Context) {
 // concurrently with it.
 func (r *PendingTransferRecon) RunOnce(ctx context.Context) {
 	if !r.running.CompareAndSwap(false, true) {
-		log.Println("pending-transfer-recon: previous run still in progress, skipping this tick")
+		logger.Debug().Msg("pending-transfer-recon: previous run still in progress, skipping this tick")
 		return
 	}
 	defer r.running.Store(false)
 
 	pending, err := r.TransferRepo.ListPendingTransfers(ctx)
 	if err != nil {
-		log.Printf("pending-transfer-recon: failed to list pending transfers: %v", err)
+		logger.Error().Err(err).Msg("pending-transfer-recon: failed to list pending transfers")
 		return
 	}
 	if len(pending) == 0 {
 		return
 	}
 
-	log.Printf("pending-transfer-recon: reconciling %d stuck pending transfer(s)", len(pending))
+	logger.Info().Int("count", len(pending)).Msg("pending-transfer-recon: reconciling stuck pending transfer(s)")
 	for _, transfer := range pending {
 		resolved, err := r.TransferRepo.ResolvePendingTransfer(ctx, transfer)
 		if err != nil {
-			log.Printf("pending-transfer-recon: failed to resolve transfer %s: %v", transfer.ID, err)
+			logger.Error().Err(err).Str("transfer_id", transfer.ID).Msg("pending-transfer-recon: failed to resolve transfer")
 			continue
 		}
-		log.Printf("pending-transfer-recon: resolved transfer %s -> %s", resolved.ID, resolved.Status)
+		logger.Info().Str("transfer_id", resolved.ID).Str("status", string(resolved.Status)).Msg("pending-transfer-recon: resolved transfer")
 	}
 }

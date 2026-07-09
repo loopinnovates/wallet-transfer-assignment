@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"errors"
-	"log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -15,6 +14,7 @@ import (
 	"github.com/loopinnovates/wallet-transfer-assignment/internal/service"
 	"github.com/loopinnovates/wallet-transfer-assignment/internal/worker"
 	"github.com/loopinnovates/wallet-transfer-assignment/pkg/factory"
+	"github.com/loopinnovates/wallet-transfer-assignment/pkg/logger"
 	"github.com/loopinnovates/wallet-transfer-assignment/repository/postgres"
 )
 
@@ -22,10 +22,11 @@ const shutdownTimeout = 10 * time.Second
 
 func main() {
 	appConfig := config.AppConfig()
+	logger.Init(appConfig.LogLevel)
 
 	appFactory, err := factory.NewFactory(appConfig)
 	if err != nil {
-		log.Fatalf("failed to connect to database: %v", err)
+		logger.Fatal().Err(err).Msg("failed to connect to database")
 	}
 	defer appFactory.Close()
 
@@ -46,7 +47,7 @@ func main() {
 
 	serveErr := make(chan error, 1)
 	go func() {
-		log.Printf("listening on :%s", appConfig.Port)
+		logger.Info().Str("port", appConfig.Port).Msg("listening")
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			serveErr <- err
 			return
@@ -66,18 +67,18 @@ func main() {
 	case err := <-serveErr:
 		cancelRecon()
 		if err != nil {
-			log.Fatalf("server failed: %v", err)
+			logger.Fatal().Err(err).Msg("server failed")
 		}
 	case sig := <-stop:
-		log.Printf("received %s, shutting down gracefully", sig)
+		logger.Info().Str("signal", sig.String()).Msg("received signal, shutting down gracefully")
 		cancelRecon()
 
 		ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 		defer cancel()
 
 		if err := srv.Shutdown(ctx); err != nil {
-			log.Fatalf("graceful shutdown failed: %v", err)
+			logger.Fatal().Err(err).Msg("graceful shutdown failed")
 		}
-		log.Println("server shut down cleanly")
+		logger.Info().Msg("server shut down cleanly")
 	}
 }

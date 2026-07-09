@@ -66,6 +66,26 @@ func TestAppConfig_PoolAndConcurrencyDefaults(t *testing.T) {
 	}
 }
 
+func TestAppConfig_LogLevelDefault(t *testing.T) {
+	if err := os.Unsetenv(config.LogLevelKey); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg := config.AppConfig()
+	if cfg.LogLevel != "info" {
+		t.Errorf("expected default LogLevel info, got %s", cfg.LogLevel)
+	}
+}
+
+func TestAppConfig_LogLevelOverride(t *testing.T) {
+	t.Setenv(config.LogLevelKey, "debug")
+
+	cfg := config.AppConfig()
+	if cfg.LogLevel != "debug" {
+		t.Errorf("expected LogLevel debug, got %s", cfg.LogLevel)
+	}
+}
+
 func TestAppConfig_PoolAndConcurrencyOverrides(t *testing.T) {
 	t.Setenv(config.MaxConcurrentRequestsKey, "500")
 	t.Setenv(config.DBMaxOpenConnsKey, "10")

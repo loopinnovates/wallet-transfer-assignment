@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/loopinnovates/wallet-transfer-assignment/pkg/construct"
+	"github.com/loopinnovates/wallet-transfer-assignment/pkg/logger"
 	"github.com/loopinnovates/wallet-transfer-assignment/pkg/utils"
 )
 
@@ -24,6 +25,7 @@ func ConcurrencyLimit(max int) func(http.Handler) http.Handler {
 				defer func() { <-sem }()
 				next.ServeHTTP(w, r)
 			default:
+				logger.Warn().Str("path", r.URL.Path).Int("max_concurrent", max).Msg("rejecting request, server at max concurrency")
 				utils.WriteError(w, construct.ErrServerBusy)
 			}
 		})

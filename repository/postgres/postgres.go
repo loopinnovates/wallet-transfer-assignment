@@ -2,10 +2,11 @@ package postgres
 
 import (
 	"database/sql"
-	"fmt"
 	"time"
 
 	_ "github.com/lib/pq"
+
+	"github.com/loopinnovates/wallet-transfer-assignment/pkg/logger"
 )
 
 type PoolConfig struct {
@@ -27,13 +28,15 @@ func NewDB(dsn string, pool PoolConfig) (*sql.DB, error) {
 	db.SetConnMaxIdleTime(pool.ConnMaxIdleTime)
 
 	if err := db.Ping(); err != nil {
+		logger.Warn().Err(err).Msg("failed to ping db")
 		go func() {
 			err := db.Close()
 			if err != nil {
-				fmt.Printf("Error in closing db: %v", err)
+				logger.Error().Err(err).Msg("error closing db")
 			}
 		}()
 		return nil, err
 	}
+	logger.Info().Int("max_open_conns", pool.MaxOpenConns).Int("max_idle_conns", pool.MaxIdleConns).Msg("connected to db")
 	return db, nil
 }

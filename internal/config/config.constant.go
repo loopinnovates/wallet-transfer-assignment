@@ -4,6 +4,7 @@ package config
 const (
 	PortKey                  = "PORT"
 	MaxConcurrentRequestsKey = "MAX_CONCURRENT_REQUESTS"
+	LogLevelKey              = "LOG_LEVEL"
 )
 
 // Database Constants

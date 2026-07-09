@@ -3,13 +3,13 @@ package handler
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"time"
 
 	"github.com/loopinnovates/wallet-transfer-assignment/internal/dto"
 	"github.com/loopinnovates/wallet-transfer-assignment/internal/service"
 	"github.com/loopinnovates/wallet-transfer-assignment/pkg/construct"
+	"github.com/loopinnovates/wallet-transfer-assignment/pkg/logger"
 	"github.com/loopinnovates/wallet-transfer-assignment/pkg/utils"
 )
 
@@ -25,23 +25,33 @@ func TransferHandler(walletSvc service.IWalletSvc) http.Handler {
 		decoder := json.NewDecoder(r.Body)
 		decoder.DisallowUnknownFields()
 		if err := decoder.Decode(&req); err != nil {
-			fmt.Println("Error decoding request body:", err)
+			logger.Warn().Err(err).Msg("error decoding request body")
 			utils.WriteError(w, construct.ErrInvalidRequestBody)
 			return
 		}
 
 		if req.FromWalletID == "" || req.ToWalletID == "" || req.Amount <= 0 {
+			logger.Warn().Interface("request", req).Msg("missing or invalid transfer data")
 			utils.WriteError(w, construct.ErrMissingTransferData)
 			return
 		}
 
 		if req.FromWalletID == req.ToWalletID {
+			logger.Warn().Str("wallet_id", req.FromWalletID).Msg("transfer request has same source and destination wallet")
 			utils.WriteError(w, construct.ErrSameWallet)
 			return
 		}
 
+		logger.Debug().
+			Str("idempotency_key", req.IdempotencyKey).
+			Str("from_wallet_id", req.FromWalletID).
+			Str("to_wallet_id", req.ToWalletID).
+			Float64("amount", req.Amount).
+			Msg("received transfer request")
+
 		transactionID, status, timestamp, err := walletSvc.TransferFunds(ctx, req.IdempotencyKey, req.FromWalletID, req.ToWalletID, req.Amount)
 		if err != nil {
+			logger.Warn().Err(err).Str("idempotency_key", req.IdempotencyKey).Msg("transfer request failed")
 			utils.WriteError(w, construct.MapTransferError(err))
 			return
 		}

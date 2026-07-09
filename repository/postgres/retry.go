@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/lib/pq"
+	"github.com/loopinnovates/wallet-transfer-assignment/pkg/logger"
 )
 
 const (
@@ -23,6 +24,7 @@ func withRetry[T any](ctx context.Context, fn func() (T, error)) (T, error) {
 	for attempt := range maxDBRetries {
 		if attempt > 0 {
 			delay := retryBaseDelay * time.Duration(1<<uint(attempt-1))
+			logger.Debug().Int("attempt", attempt).Dur("delay", delay).Msg("retrying db operation after transient error")
 			select {
 			case <-ctx.Done():
 				return zero, ctx.Err()
@@ -38,8 +40,10 @@ func withRetry[T any](ctx context.Context, fn func() (T, error)) (T, error) {
 		if !isRetryableError(err) {
 			return zero, err
 		}
+		logger.Warn().Err(err).Int("attempt", attempt).Msg("retryable db error")
 	}
 
+	logger.Warn().Err(lastErr).Int("attempts", maxDBRetries).Msg("db operation failed after max retries")
 	return zero, lastErr
 }
 

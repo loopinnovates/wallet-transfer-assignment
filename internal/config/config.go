@@ -12,6 +12,7 @@ type Config struct {
 	ReadPGURI             string
 	WritePGURI            string
 	MaxConcurrentRequests int
+	LogLevel              string
 
 	DBMaxOpenConns    int
 	DBMaxIdleConns    int
@@ -23,6 +24,7 @@ func AppConfig() *Config {
 	port := utils.GetEnvStr(PortKey, "8080")
 
 	maxConcurrentRequests := utils.GetEnvInt(MaxConcurrentRequestsKey, 200)
+	logLevel := utils.GetEnvStr(LogLevelKey, "info")
 
 	// DB Config
 	dbUsername := utils.GetEnvStr(usernameKey, "wallet")
@@ -40,6 +42,7 @@ func AppConfig() *Config {
 		ReadPGURI:             readPGURI,
 		WritePGURI:            writePGURI,
 		MaxConcurrentRequests: maxConcurrentRequests,
+		LogLevel:              logLevel,
 		DBMaxOpenConns:        dbMaxOpenConns,
 		DBMaxIdleConns:        dbMaxIdleConns,
 		DBConnMaxLifetime:     dbConnMaxLifetime,

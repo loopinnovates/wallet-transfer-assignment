@@ -1,7 +1,6 @@
 package router
 
 import (
-	"fmt"
 	"net/http"
 
 	"github.com/gorilla/mux"
@@ -9,6 +8,7 @@ import (
 	"github.com/loopinnovates/wallet-transfer-assignment/internal/middleware"
 	"github.com/loopinnovates/wallet-transfer-assignment/internal/service"
 	"github.com/loopinnovates/wallet-transfer-assignment/pkg/construct"
+	"github.com/loopinnovates/wallet-transfer-assignment/pkg/logger"
 	"github.com/loopinnovates/wallet-transfer-assignment/pkg/utils"
 )
 
@@ -33,7 +33,7 @@ func New(rc *RouterContext) *mux.Router {
 	router.Handle("/transfers", transferHandler).Methods("POST")
 
 	router.NotFoundHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		fmt.Printf("Route not found: %s %s", r.Method, r.URL.Path)
+		logger.Info().Str("method", r.Method).Str("path", r.URL.Path).Msg("route not found")
 		utils.WriteError(w, construct.ErrRouteNotFound)
 	})
 	return router
