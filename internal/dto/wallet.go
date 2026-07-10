@@ -1,7 +1,7 @@
 package dto
 
 type TransferRequest struct {
-	IdempotencyKey string  `json:"key"`
+	IdempotencyKey string  `json:"idempotency_key"`
 	FromWalletID   string  `json:"from_wallet_id"`
 	ToWalletID     string  `json:"to_wallet_id"`
 	Amount         float64 `json:"amount"`

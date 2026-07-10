@@ -36,11 +36,13 @@ func TestConcurrencyLimit_RejectsBeyondMax(t *testing.T) {
 	})
 	limited := middleware.ConcurrencyLimit(max)(blocking)
 
-	for range max {
-		wg.Go(func() {
+	for i := 0; i < max; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
 			rec := httptest.NewRecorder()
 			limited.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
-		})
+		}()
 	}
 
 	for range max {
