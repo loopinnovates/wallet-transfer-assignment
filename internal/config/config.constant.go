@@ -9,10 +9,11 @@ const (
 
 // Database Constants
 const (
-	ReadPGURIKey  = "READ_PG_URI"
-	WritePGURIKey = "WRITE_PG_URI"
-	usernameKey   = "DB_USERNAME"
-	passwordKey   = "DB_PASSWORD"
+	usernameKey = "DB_USERNAME"
+	passwordKey = "DB_PASSWORD"
+	hostKey     = "DB_HOST"
+	portKey     = "DB_PORT"
+	dbNameKey   = "DB_NAME"
 
 	DBMaxOpenConnsKey           = "DB_MAX_OPEN_CONNS"
 	DBMaxIdleConnsKey           = "DB_MAX_IDLE_CONNS"

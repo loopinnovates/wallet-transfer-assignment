@@ -86,6 +86,48 @@ func TestAppConfig_LogLevelOverride(t *testing.T) {
 	}
 }
 
+func TestAppConfig_DBURIDefaults(t *testing.T) {
+	for _, key := range []string{
+		"DB_USERNAME",
+		"DB_PASSWORD",
+		"DB_HOST",
+		"DB_PORT",
+		"DB_NAME",
+	} {
+		if err := os.Unsetenv(key); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	cfg := config.AppConfig()
+
+	expectedURI := "postgres://wallet:wallet@localhost:5432/wallet?sslmode=disable"
+	if cfg.ReadPGURI != expectedURI {
+		t.Errorf("expected default ReadPGURI %q, got %q", expectedURI, cfg.ReadPGURI)
+	}
+	if cfg.WritePGURI != expectedURI {
+		t.Errorf("expected default WritePGURI %q, got %q", expectedURI, cfg.WritePGURI)
+	}
+}
+
+func TestAppConfig_DBURIOverrides(t *testing.T) {
+	t.Setenv("DB_USERNAME", "custom_user")
+	t.Setenv("DB_PASSWORD", "custom_pass")
+	t.Setenv("DB_HOST", "db.example.com")
+	t.Setenv("DB_PORT", "6543")
+	t.Setenv("DB_NAME", "custom_db")
+
+	cfg := config.AppConfig()
+
+	expectedURI := "postgres://custom_user:custom_pass@db.example.com:6543/custom_db?sslmode=disable"
+	if cfg.ReadPGURI != expectedURI {
+		t.Errorf("expected ReadPGURI %q, got %q", expectedURI, cfg.ReadPGURI)
+	}
+	if cfg.WritePGURI != expectedURI {
+		t.Errorf("expected WritePGURI %q, got %q", expectedURI, cfg.WritePGURI)
+	}
+}
+
 func TestAppConfig_PoolAndConcurrencyOverrides(t *testing.T) {
 	t.Setenv(config.MaxConcurrentRequestsKey, "500")
 	t.Setenv(config.DBMaxOpenConnsKey, "10")

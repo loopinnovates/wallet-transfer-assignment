@@ -29,8 +29,12 @@ func AppConfig() *Config {
 	// DB Config
 	dbUsername := utils.GetEnvStr(usernameKey, "wallet")
 	dbPassword := utils.GetEnvStr(passwordKey, "wallet")
-	readPGURI := fmt.Sprintf(utils.GetEnvStr(ReadPGURIKey, "postgres://%s:%s@localhost:5432/wallet_transfer?sslmode=disable"), dbUsername, dbPassword)
-	writePGURI := fmt.Sprintf(utils.GetEnvStr(WritePGURIKey, "postgres://%s:%s@localhost:5432/wallet_transfer?sslmode=disable"), dbUsername, dbPassword)
+	dbHost := utils.GetEnvStr(hostKey, "localhost")
+	dbPort := utils.GetEnvInt(portKey, 5432)
+	dbName := utils.GetEnvStr(dbNameKey, "wallet")
+
+	readPGURI := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=disable", dbUsername, dbPassword, dbHost, dbPort, dbName)
+	writePGURI := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=disable", dbUsername, dbPassword, dbHost, dbPort, dbName)
 
 	dbMaxOpenConns := utils.GetEnvInt(DBMaxOpenConnsKey, 25)
 	dbMaxIdleConns := utils.GetEnvInt(DBMaxIdleConnsKey, 25)
