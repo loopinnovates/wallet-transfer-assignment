@@ -38,7 +38,7 @@ func TransferHandler(walletSvc service.IWalletSvc) http.Handler {
 			return
 		}
 
-		if req.FromWalletID == "" || req.ToWalletID == "" || req.Amount <= 0 {
+		if req.IdempotencyKey == "" || req.FromWalletID == "" || req.ToWalletID == "" || req.Amount <= 0 {
 			logger.Warn().Interface("request", req).Msg("missing or invalid transfer data")
 			utils.WriteError(w, construct.ErrMissingTransferData)
 			return
