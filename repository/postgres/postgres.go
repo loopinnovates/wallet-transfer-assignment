@@ -29,12 +29,9 @@ func NewDB(dsn string, pool PoolConfig) (*sql.DB, error) {
 
 	if err := db.Ping(); err != nil {
 		logger.Warn().Err(err).Msg("failed to ping db")
-		go func() {
-			err := db.Close()
-			if err != nil {
-				logger.Error().Err(err).Msg("error closing db")
-			}
-		}()
+		if closeErr := db.Close(); closeErr != nil {
+			logger.Error().Err(closeErr).Msg("error closing db")
+		}
 		return nil, err
 	}
 	logger.Info().Int("max_open_conns", pool.MaxOpenConns).Int("max_idle_conns", pool.MaxIdleConns).Msg("connected to db")
